@@ -1,0 +1,266 @@
+  @SimpleFunction(description = "Exact GateCraft cutting-optimizer length display value. Returns rounded mm or rounded inch value without a unit suffix.")
+  public double CutFormatLength(double valueMm, String unit) {
+    if ("mm".equalsIgnoreCase(unit)) {
+      return Math.round(valueMm);
+    }
+    return Math.round(((valueMm / 25.4d) * 10.0d) / 10.0d);
+  }
+
+  @SimpleFunction(description = "GateCraft GeoPro length-unit factor in metres.")
+  public double GeoUnitFactor(String unit) {
+    String u = unit == null ? "" : unit.toLowerCase(java.util.Locale.US);
+    if ("mm".equals(u)) return 0.001d;
+    if ("cm".equals(u)) return 0.01d;
+    if ("m".equals(u)) return 1.0d;
+    if ("inch".equals(u)) return 0.0254d;
+    if ("ft".equals(u)) return 0.3048d;
+    if ("yard".equals(u)) return 0.9144d;
+    return 1.0d;
+  }
+
+  @SimpleFunction(description = "Exact GateCraft GeoPro density mapping, kg/m3. For custom material the supplied custom density is returned.")
+  public double GeoDensity(String material, double customDensity) {
+    String m = material == null ? "" : material.toLowerCase(java.util.Locale.US);
+    if ("steel".equals(m)) return 7850.0d;
+    if ("stainless".equals(m)) return 8000.0d;
+    if ("aluminium".equals(m)) return 2700.0d;
+    if ("copper".equals(m)) return 8960.0d;
+    if ("brass".equals(m)) return 8500.0d;
+    if ("concrete".equals(m)) return 2400.0d;
+    if ("wood".equals(m)) return 650.0d;
+    if ("glass".equals(m)) return 2500.0d;
+    if ("plastic".equals(m)) return 1200.0d;
+    if ("custom".equals(m)) return customDensity;
+    return 0.0d;
+  }
+
+  @SimpleFunction(description = "Exact GateCraft trapezoidal-sheet structure recommendation. Returns spacing, post count, post profile, footing labels, rows, lengths, concrete and paint-area values.")
+  public YailList TrapezStructureRecommendation(double sheetHeightMm, double fenceLengthMm) {
+    double postSpacing;
+    String postProfile;
+    String footingLabel;
+    double postBaseHeight = sheetHeightMm;
+    double horizontalRows;
+    if (sheetHeightMm <= 2000.0d) postSpacing = 2500.0d;
+    else if (sheetHeightMm <= 3000.0d) postSpacing = 2200.0d;
+    else postSpacing = 2000.0d;
+
+    double postCount = (fenceLengthMm / postSpacing) + 1.0d;
+    if (sheetHeightMm <= 2000.0d) {
+      postProfile = "60x60"; footingLabel = "400x400x800";
+    } else if (sheetHeightMm <= 3000.0d) {
+      postProfile = "80x80"; footingLabel = "500x500x900";
+    } else {
+      postProfile = "100x100"; footingLabel = "600x600x1000";
+    }
+    if (sheetHeightMm <= 1000.0d) horizontalRows = 2.0d;
+    else if (sheetHeightMm <= 1600.0d) horizontalRows = 3.0d;
+    else if (sheetHeightMm <= 2500.0d) horizontalRows = 4.0d;
+    else horizontalRows = 5.0d;
+
+    double horizontalLengthTotal = horizontalRows * fenceLengthMm;
+    String horizontalProfile = "40x20";
+    double footingM3;
+    double profileExtra;
+    if ("60x60".equals(postProfile)) { footingM3 = 0.128d; profileExtra = 800.0d; }
+    else if ("80x80".equals(postProfile)) { footingM3 = 0.225d; profileExtra = 900.0d; }
+    else { footingM3 = 0.036d; profileExtra = 1000.0d; }
+    double concreteTotalM3 = footingM3 * postCount;
+    double postLengthTotal = (postBaseHeight + profileExtra) * postCount;
+    double perimeter;
+    if ("60x60".equals(postProfile)) perimeter = 60.0d + 4.0d;
+    else if ("80x80".equals(postProfile)) perimeter = 80.0d + 4.0d;
+    else perimeter = 100.0d + 4.0d;
+    double postPaintArea = (postLengthTotal * perimeter) / 1000000.0d;
+    double horizontalPaintArea = (horizontalLengthTotal * perimeter) / 1000000.0d;
+    double totalPaintArea = postPaintArea + horizontalPaintArea;
+    return list(postSpacing, postCount, postProfile, footingLabel, postBaseHeight,
+        horizontalRows, horizontalLengthTotal, horizontalProfile, footingM3, profileExtra,
+        concreteTotalM3, postLengthTotal, perimeter, postPaintArea, horizontalPaintArea, totalPaintArea);
+  }
+
+  private static final class CutConsumptionExactResult {
+    double usedLength;
+    double techLoss;
+    String nextEndState;
+    double newRemain;
+  }
+
+  private CutConsumptionExactResult cutConsumptionExact(String currentEndState, String pieceLeftEnd,
+      String pieceRightEnd, double pieceLength, double currentRemain, YailList settingsRecord) {
+    CutConsumptionExactResult out = new CutConsumptionExactResult();
+    double kerf = cutNum(settingsRecord, 4);
+    double raw45 = cutNum(settingsRecord, 5);
+    int startCutCount = 0;
+    int endCutCount = 0;
+    double transitionLoss = 0.0d;
+
+    if ("RAW".equals(currentEndState)) {
+      if ("90".equals(pieceLeftEnd)) startCutCount = 0;
+      else if ("45".equals(pieceLeftEnd)) startCutCount = 1;
+    } else if ("45".equals(currentEndState)) {
+      if ("45".equals(pieceLeftEnd)) startCutCount = 0;
+      else if ("90".equals(pieceLeftEnd)) { startCutCount = 1; transitionLoss = raw45; }
+    } else if ("90".equals(currentEndState)) {
+      if ("90".equals(pieceLeftEnd)) startCutCount = 0;
+      else if ("45".equals(pieceLeftEnd)) startCutCount = 1;
+    }
+
+    if ("45".equals(pieceRightEnd) || "90".equals(pieceRightEnd)) endCutCount = 1;
+    double kerfLoss = (startCutCount + endCutCount) * kerf;
+    double linearUsed = pieceLength + kerfLoss;
+    double remainCorrection = "45".equals(pieceRightEnd) ? raw45 : 0.0d;
+    out.usedLength = linearUsed;
+    out.techLoss = kerfLoss + transitionLoss;
+    out.nextEndState = pieceRightEnd == null ? "" : pieceRightEnd;
+    out.newRemain = (currentRemain - linearUsed) + remainCorrection;
+    return out;
+  }
+
+  private double cutNum(YailList list, int oneBasedIndex) {
+    if (list == null || oneBasedIndex < 1 || oneBasedIndex > list.size()) return 0.0d;
+    return SafeNumber(list.getObject(oneBasedIndex - 1), 0.0d);
+  }
+
+  private String cutText(YailList list, int oneBasedIndex) {
+    if (list == null || oneBasedIndex < 1 || oneBasedIndex > list.size()) return "";
+    Object v = list.getObject(oneBasedIndex - 1);
+    return v == null ? "" : String.valueOf(v);
+  }
+
+  private YailList cutNewStockExact(String profileCode, String profileName, double stockLength,
+      int stockCounter, String stockLabel) {
+    java.util.ArrayList<Object> usedPieces = new java.util.ArrayList<Object>();
+    String stockId = String.valueOf(stockLabel) + profileCode + "_" + stockCounter;
+    return list(stockId, profileCode, profileName, stockLength, stockLength, "RAW",
+        YailList.makeList(usedPieces), 0.0d, 0.0d, "OPEN");
+  }
+
+  private YailList cutApplyPieceExact(YailList stock, YailList piece, YailList settings) {
+    String stockId = cutText(stock, 1);
+    String profileCode = cutText(stock, 2);
+    String profileName = cutText(stock, 3);
+    double stockLength = cutNum(stock, 4);
+    double currentRemain = cutNum(stock, 5);
+    String currentEndState = cutText(stock, 6);
+    Object usedObj = stock != null && stock.size() >= 7 ? stock.getObject(6) : null;
+    java.util.ArrayList<Object> usedPieces = new java.util.ArrayList<Object>();
+    if (usedObj instanceof YailList) {
+      YailList yl = (YailList) usedObj;
+      for (int i = 0; i < yl.size(); i++) usedPieces.add(yl.getObject(i));
+    }
+    double totalUseful = cutNum(stock, 8);
+    double totalTechLoss = cutNum(stock, 9);
+    String stockStatus = cutText(stock, 10);
+
+    String instanceId = cutText(piece, 1);
+    String pieceName = cutText(piece, 4);
+    double pieceLength = cutNum(piece, 5);
+    String leftEnd = cutText(piece, 6);
+    String rightEnd = cutText(piece, 7);
+    CutConsumptionExactResult c = cutConsumptionExact(currentEndState, leftEnd, rightEnd,
+        pieceLength, currentRemain, settings);
+    YailList usedRecord = list(instanceId, pieceName, pieceLength, leftEnd, rightEnd,
+        currentEndState, c.usedLength, c.techLoss, c.nextEndState, c.newRemain);
+    usedPieces.add(usedRecord);
+    totalUseful += pieceLength;
+    totalTechLoss += c.techLoss;
+    return list(stockId, profileCode, profileName, stockLength, c.newRemain, c.nextEndState,
+        YailList.makeList(usedPieces), totalUseful, totalTechLoss, stockStatus);
+  }
+
+  private int cutFindBestStockExact(java.util.ArrayList<YailList> stocks, YailList piece,
+      YailList settings) {
+    int bestIndex = 0;
+    double bestScore = 999999999.0d;
+    double pieceLength = cutNum(piece, 5);
+    String pieceLeftEnd = cutText(piece, 6);
+    String pieceRightEnd = cutText(piece, 7);
+    for (int i = 0; i < stocks.size(); i++) {
+      YailList stock = stocks.get(i);
+      double remain = cutNum(stock, 5);
+      String endState = cutText(stock, 6);
+      String status = cutText(stock, 10);
+      if (!"OPEN".equals(status)) continue;
+      CutConsumptionExactResult c = cutConsumptionExact(endState, pieceLeftEnd, pieceRightEnd,
+          pieceLength, remain, settings);
+      if (c.usedLength <= remain) {
+        double statePenalty = (("45".equals(endState) && "90".equals(pieceLeftEnd)) ||
+            ("90".equals(endState) && "45".equals(pieceLeftEnd))) ? 20.0d : 0.0d;
+        double score = c.newRemain + (c.techLoss * 10.0d) + statePenalty;
+        if (score < bestScore) {
+          bestScore = score;
+          bestIndex = i + 1;
+        }
+      }
+    }
+    return bestIndex;
+  }
+
+  private YailList cutBuildProfileResultExact(String profileCode, String profileName,
+      java.util.ArrayList<YailList> stocks, YailList settings) {
+    double stockLength = cutNum(settings, 3);
+    double minUseful = cutNum(settings, 11);
+    double minScrap = cutNum(settings, 12);
+    double stockCount = stocks.size();
+    double totalOriginal = stockCount * stockLength;
+    double totalUseful = 0.0d;
+    double totalTechLoss = 0.0d;
+    double totalRemain = 0.0d;
+    double totalScrap = 0.0d;
+    double totalUsefulOffcut = 0.0d;
+    for (YailList stock : stocks) {
+      double remain = cutNum(stock, 5);
+      totalUseful += cutNum(stock, 8);
+      totalTechLoss += cutNum(stock, 9);
+      totalRemain += remain;
+      if (remain >= minUseful) totalUsefulOffcut += remain;
+      else if (remain < minScrap) totalScrap += remain;
+    }
+    java.util.ArrayList<Object> stockObjects = new java.util.ArrayList<Object>();
+    stockObjects.addAll(stocks);
+    return list(profileCode, profileName, stockCount, totalOriginal, totalUseful, totalTechLoss,
+        totalRemain, totalScrap, totalUsefulOffcut, YailList.makeList(stockObjects));
+  }
+
+  @SimpleFunction(description = "Exact GateCraft per-profile RAW/45/90 cutting optimization. Returns the same profile-result record as the Blockly implementation.")
+  public YailList CutOptimizeProfileExact(YailList profileGroupRecord, YailList settingsRecord,
+      String stockLabel) {
+    if (profileGroupRecord == null || profileGroupRecord.size() < 3) return YailList.makeEmptyList();
+    Object piecesObj = profileGroupRecord.getObject(2);
+    if (!(piecesObj instanceof YailList)) return YailList.makeEmptyList();
+    YailList pieces = (YailList) piecesObj;
+    if (pieces.size() < 1) return YailList.makeEmptyList();
+    Object firstObj = pieces.getObject(0);
+    if (!(firstObj instanceof YailList)) return YailList.makeEmptyList();
+    YailList first = (YailList) firstObj;
+    String profileCode = cutText(first, 2);
+    String profileName = cutText(first, 3);
+    double stockLength = cutNum(settingsRecord, 3);
+    java.util.ArrayList<YailList> stocks = new java.util.ArrayList<YailList>();
+    int stockCounter = 0;
+    for (int p = 0; p < pieces.size(); p++) {
+      Object pieceObj = pieces.getObject(p);
+      if (!(pieceObj instanceof YailList)) continue;
+      YailList piece = (YailList) pieceObj;
+      int target = cutFindBestStockExact(stocks, piece, settingsRecord);
+      if (target <= 0) {
+        stockCounter++;
+        stocks.add(cutNewStockExact(profileCode, profileName, stockLength, stockCounter, stockLabel));
+        target = stocks.size();
+      }
+      YailList updated = cutApplyPieceExact(stocks.get(target - 1), piece, settingsRecord);
+      stocks.set(target - 1, updated);
+    }
+    return cutBuildProfileResultExact(profileCode, profileName, stocks, settingsRecord);
+  }
+
+  @SimpleFunction(description = "Exact ElectroPro money text: rounded value plus selected/profile currency.")
+  public String ElectroMoney(Object value, String selectedCurrency, String profileCurrency) {
+    String currency = selectedCurrency == null ? "" : selectedCurrency;
+    if (currency.length() == 0) {
+      currency = profileCurrency == null ? "" : profileCurrency;
+      if (currency.length() == 0) currency = "HUF";
+    }
+    return String.valueOf(Math.round(SafeNumber(value, 0.0d))) + " " + currency;
+  }
