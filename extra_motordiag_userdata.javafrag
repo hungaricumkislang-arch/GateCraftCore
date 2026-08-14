@@ -1,0 +1,121 @@
+  @SimpleFunction(description = "Returns a new list with firstValue followed by all values. The input list is never mutated.")
+  public YailList MotorDiagPrepend(Object firstValue, YailList values) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    out.add(firstValue);
+    if (values != null) for (int i = 0; i < values.size(); i++) out.add(values.getObject(i));
+    return YailList.makeList(out);
+  }
+
+  private boolean mdRefMatches(Object ref, String controllerId, String recordType, String recordId) {
+    java.util.ArrayList<Object> r = mdList(ref);
+    if (r.size() < 3) return false;
+    return mdNorm(r.get(0)).equals(mdNorm(controllerId))
+        && mdNorm(r.get(1)).equals(mdNorm(recordType))
+        && mdNorm(r.get(2)).equals(mdNorm(recordId));
+  }
+
+  @SimpleFunction(description = "Toggles one MotorDiag [controllerId,recordType,recordId] reference and returns a fresh list without duplicates.")
+  public YailList MotorDiagToggleReference(YailList refs, String controllerId, String recordType, String recordId) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    boolean removed = false;
+    if (refs != null) {
+      for (int i = 0; i < refs.size(); i++) {
+        Object ref = refs.getObject(i);
+        if (mdRefMatches(ref, controllerId, recordType, recordId)) {
+          removed = true;
+          continue;
+        }
+        out.add(ref);
+      }
+    }
+    if (!removed) out.add(list(controllerId, recordType, recordId));
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Appends a MotorDiag history reference after removing earlier copies. Enforces the requested maximum length. History entries are [controllerId,recordType,recordId,openedAtMs].")
+  public YailList MotorDiagAppendHistory(YailList history, String controllerId, String recordType, String recordId, double maximumItems) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (history != null) {
+      for (int i = 0; i < history.size(); i++) {
+        Object ref = history.getObject(i);
+        if (!mdRefMatches(ref, controllerId, recordType, recordId)) out.add(ref);
+      }
+    }
+    out.add(list(controllerId, recordType, recordId, (double) System.currentTimeMillis()));
+    int max = (int) Math.round(maximumItems);
+    if (max < 1) max = 1;
+    while (out.size() > max) out.remove(0);
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Builds stable display strings for MotorDiag favorite/history references.")
+  public YailList MotorDiagReferenceDisplay(YailList refs) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (refs == null) return YailList.makeList(out);
+    for (int i = 0; i < refs.size(); i++) {
+      Object ref = refs.getObject(i);
+      java.util.ArrayList<Object> r = mdList(ref);
+      if (r.size() >= 3) out.add(mdString(r.get(0)) + " | " + mdString(r.get(1)) + " | " + mdString(r.get(2)));
+      else out.add(mdString(ref));
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Filters MotorDiag favorite/history references by controller/type/id text and returns the original matching reference records.")
+  public YailList MotorDiagFilterReferences(YailList refs, Object query) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    String q = mdNorm(query);
+    if (refs == null) return YailList.makeList(out);
+    for (int i = 0; i < refs.size(); i++) {
+      Object ref = refs.getObject(i);
+      if (q.length() == 0 || mdNorm(mdString(ref)).contains(q)) out.add(ref);
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Toggles a unique text value in a list and returns a fresh list.")
+  public YailList MotorDiagToggleText(YailList values, String textValue) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    String wanted = mdNorm(textValue);
+    boolean removed = false;
+    if (values != null) {
+      for (int i = 0; i < values.size(); i++) {
+        Object value = values.getObject(i);
+        if (mdNorm(value).equals(wanted)) { removed = true; continue; }
+        out.add(value);
+      }
+    }
+    if (!removed && textValue != null && textValue.trim().length() > 0) out.add(textValue);
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Returns true when the supplied MotorDiag value is a non-empty dictionary-like record.")
+  public boolean MotorDiagIsRecord(Object record) {
+    return !mdMap(record).isEmpty();
+  }
+
+  @SimpleFunction(description = "Builds localized display strings for MotorDiag symptom records.")
+  public YailList MotorDiagBuildSymptomDisplay(YailList records, double languageIndex) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (records == null) return YailList.makeList(out);
+    int lang = (int) Math.round(languageIndex);
+    for (int i = 0; i < records.size(); i++) {
+      Object r = records.getObject(i);
+      String id = mdString(mdGet(r, "symptom_id", ""));
+      String title = mdLocalized(r, "title", lang);
+      out.add(title.length() > 0 ? title : id);
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Copies text to the Android system clipboard.")
+  public void CopyTextToClipboard(String textValue) {
+    try {
+      android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+          form.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+      if (clipboard != null) {
+        android.content.ClipData clip = android.content.ClipData.newPlainText("GateCraft", textValue == null ? "" : textValue);
+        clipboard.setPrimaryClip(clip);
+      }
+    } catch (Throwable ignored) { }
+  }
