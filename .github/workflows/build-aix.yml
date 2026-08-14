@@ -1,0 +1,53 @@
+name: Build GateCraftCore AIX
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GateCraftCore
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant
+
+      - name: Get official MIT App Inventor extension template
+        run: |
+          git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+
+      - name: Copy GateCraftCore source into build environment
+        run: |
+          rm -rf buildenv/src/*
+          cp -R src/. buildenv/src/
+
+      - name: Build AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+
+      - name: Show generated files
+        run: |
+          find buildenv/out -maxdepth 2 -type f -print
+
+      - name: Upload AIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftCore-aix
+          path: buildenv/out/*.aix
+          if-no-files-found: error
