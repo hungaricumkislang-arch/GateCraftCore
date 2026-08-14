@@ -1,0 +1,308 @@
+  // ------------------------------------------------------------------
+  // GateCraft MotorDiag + Electro manual-cable helpers (v2.3)
+  // ------------------------------------------------------------------
+
+  private java.util.Map<Object,Object> mdMap(Object value) {
+    if (value instanceof java.util.Map) {
+      @SuppressWarnings("unchecked")
+      java.util.Map<Object,Object> m = (java.util.Map<Object,Object>) value;
+      return m;
+    }
+    return java.util.Collections.emptyMap();
+  }
+
+  private java.util.ArrayList<Object> mdList(Object value) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (value instanceof YailList) {
+      YailList yl = (YailList) value;
+      for (int i = 0; i < yl.size(); i++) out.add(yl.getObject(i));
+    } else if (value instanceof java.util.List) {
+      out.addAll((java.util.List<?>) value);
+    }
+    return out;
+  }
+
+  private Object mdGet(Object record, String key, Object fallback) {
+    if (record == null || key == null) return fallback;
+    java.util.Map<Object,Object> m = mdMap(record);
+    if (m.containsKey(key)) {
+      Object v = m.get(key);
+      return v == null ? fallback : v;
+    }
+    return fallback;
+  }
+
+  private String mdString(Object value) {
+    if (value == null) return "";
+    if (value instanceof YailList || value instanceof java.util.List) {
+      java.util.ArrayList<Object> l = mdList(value);
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < l.size(); i++) {
+        if (i > 0) sb.append(" ");
+        sb.append(mdString(l.get(i)));
+      }
+      return sb.toString();
+    }
+    if (value instanceof java.util.Map) {
+      StringBuilder sb = new StringBuilder();
+      for (Object v : ((java.util.Map<?,?>) value).values()) {
+        if (sb.length() > 0) sb.append(" ");
+        sb.append(mdString(v));
+      }
+      return sb.toString();
+    }
+    return String.valueOf(value);
+  }
+
+  private String mdNorm(Object value) {
+    String s = mdString(value).trim().toUpperCase(java.util.Locale.ROOT);
+    return s.replaceAll("\\s+", " ");
+  }
+
+  private String mdLangSuffix(int languageIndex) {
+    switch (languageIndex) {
+      case 2: return "_en";
+      case 3: return "_de";
+      case 4: return "_es";
+      case 5: return "_fr";
+      case 6: return "_zh";
+      default: return "_hu";
+    }
+  }
+
+  private String mdLocalized(Object record, String baseKey, int languageIndex) {
+    if (record == null || baseKey == null) return "";
+    int lang = languageIndex < 1 || languageIndex > 6 ? 1 : languageIndex;
+    String localized = mdString(mdGet(record, baseKey + mdLangSuffix(lang), ""));
+    if (localized.length() > 0) return localized;
+    String base = mdString(mdGet(record, baseKey, ""));
+    if (base.length() > 0) return base;
+    if (lang != 2) {
+      String en = mdString(mdGet(record, baseKey + "_en", ""));
+      if (en.length() > 0) return en;
+    }
+    String hu = mdString(mdGet(record, baseKey + "_hu", ""));
+    return hu;
+  }
+
+  private boolean mdVerified(Object record) {
+    String status = mdNorm(mdGet(record, "status", ""));
+    String confidence = mdNorm(mdGet(record, "confidence", ""));
+    String verified = mdString(mdGet(record, "verified_date", "")).trim();
+    return "VERIFIED".equals(status)
+        || confidence.contains("MANUFACTURER_CONFIRMED")
+        || confidence.contains("SECOND_SOURCE_CONFIRMED")
+        || verified.length() > 0;
+  }
+
+  private String mdSearchText(Object record, String mode) {
+    String m = mdNorm(mode);
+    StringBuilder sb = new StringBuilder();
+    String[] keys;
+    if ("FAULT".equals(m)) {
+      keys = new String[]{"code","normalized_code","title","title_hu","title_en","title_de","title_es","title_fr","title_zh","meaning","meaning_hu","meaning_en","meaning_de","meaning_es","meaning_fr","meaning_zh","tags"};
+    } else if ("LED".equals(m)) {
+      keys = new String[]{"led_name","flash_count","pattern_text","title","title_hu","title_en","meaning","meaning_hu","meaning_en","tags"};
+    } else if ("DIP".equals(m)) {
+      keys = new String[]{"bank","switch_number","display_code","title","title_hu","title_en","on_meaning","off_meaning","tags"};
+    } else if ("PARAMETER".equals(m)) {
+      keys = new String[]{"parameter_code","title","title_hu","title_en","description","description_hu","description_en","menu_path","tags"};
+    } else if ("TERMINAL".equals(m)) {
+      keys = new String[]{"terminal_numbers","group","function","function_hu","function_en","description","description_hu","description_en","tags"};
+    } else if ("MANUAL".equals(m)) {
+      keys = new String[]{"title","revision","language","notes"};
+    } else if ("CONTROLLER".equals(m)) {
+      keys = new String[]{"controller_id","brand_id","family","controller_name","aliases","revision","supply_summary","motor_type"};
+    } else if ("BRAND".equals(m)) {
+      keys = new String[]{"brand_id","brand_name","aliases","country"};
+    } else {
+      keys = new String[]{"id","title","code","tags"};
+    }
+    for (String key : keys) {
+      Object v = mdGet(record, key, "");
+      if (sb.length() > 0) sb.append(' ');
+      sb.append(mdString(v));
+    }
+    return mdNorm(sb.toString());
+  }
+
+  @SimpleFunction(description = "MotorDiag search normalization: trim, uppercase and collapse whitespace.")
+  public String MotorDiagNormalizeSearch(Object text) {
+    return mdNorm(text);
+  }
+
+  @SimpleFunction(description = "Returns a field from a MotorDiag dictionary-like record, or the supplied fallback.")
+  public Object MotorDiagGet(Object record, String key, Object fallback) {
+    return mdGet(record, key, fallback);
+  }
+
+  @SimpleFunction(description = "Returns a MotorDiag field as a list. Missing/non-list fields return an empty list.")
+  public YailList MotorDiagGetList(Object record, String key) {
+    return YailList.makeList(mdList(mdGet(record, key, YailList.makeEmptyList())));
+  }
+
+  @SimpleFunction(description = "Returns an exact localized MotorDiag record field, using baseKey_hu/en/de/es/fr/zh then baseKey fallback.")
+  public String MotorDiagText(Object record, String baseKey, double languageIndex) {
+    return mdLocalized(record, baseKey, (int) Math.round(languageIndex));
+  }
+
+  @SimpleFunction(description = "Finds the first MotorDiag record whose idField matches id. Returns an empty list when not found.")
+  public Object MotorDiagFindById(YailList records, String idField, Object id) {
+    if (records == null) return YailList.makeEmptyList();
+    String wanted = mdNorm(id);
+    for (int i = 0; i < records.size(); i++) {
+      Object rec = records.getObject(i);
+      if (wanted.equals(mdNorm(mdGet(rec, idField, "")))) return rec;
+    }
+    return YailList.makeEmptyList();
+  }
+
+  @SimpleFunction(description = "Searches MotorDiag records using the mode-specific searchable fields. Empty query returns all matching records.")
+  public YailList MotorDiagSearch(YailList records, String mode, Object query, boolean onlyVerified) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (records == null) return YailList.makeList(out);
+    String q = mdNorm(query);
+    for (int i = 0; i < records.size(); i++) {
+      Object rec = records.getObject(i);
+      if (onlyVerified && !mdVerified(rec)) continue;
+      if (q.length() == 0 || mdSearchText(rec, mode).contains(q)) out.add(rec);
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Filters MotorDiag controller metadata by brand, optional family and optional query.")
+  public YailList MotorDiagFilterControllers(YailList controllers, String brandId, String family, Object query) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (controllers == null) return YailList.makeList(out);
+    String b = mdNorm(brandId);
+    String f = mdNorm(family);
+    String q = mdNorm(query);
+    for (int i = 0; i < controllers.size(); i++) {
+      Object rec = controllers.getObject(i);
+      if (b.length() > 0 && !b.equals(mdNorm(mdGet(rec, "brand_id", "")))) continue;
+      if (f.length() > 0 && !"ALL".equals(f) && !f.equals(mdNorm(mdGet(rec, "family", "")))) continue;
+      if (q.length() > 0 && !mdSearchText(rec, "CONTROLLER").contains(q)) continue;
+      out.add(rec);
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Builds MotorDiag ListView display strings for the supplied records without losing record/index alignment.")
+  public YailList MotorDiagBuildDisplay(YailList records, String mode, double languageIndex) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (records == null) return YailList.makeList(out);
+    String m = mdNorm(mode);
+    int lang = (int) Math.round(languageIndex);
+    for (int i = 0; i < records.size(); i++) {
+      Object r = records.getObject(i);
+      String left;
+      String right;
+      if ("FAULT".equals(m)) {
+        left = mdString(mdGet(r,"code","")); right = mdLocalized(r,"title",lang);
+      } else if ("LED".equals(m)) {
+        left = mdString(mdGet(r,"pattern_text",mdGet(r,"flash_count",""))); right = mdLocalized(r,"title",lang);
+      } else if ("DIP".equals(m)) {
+        left = mdString(mdGet(r,"display_code",mdGet(r,"switch_number",""))); right = mdLocalized(r,"title",lang);
+      } else if ("PARAMETER".equals(m)) {
+        left = mdString(mdGet(r,"parameter_code","")); right = mdLocalized(r,"title",lang);
+      } else if ("TERMINAL".equals(m)) {
+        left = mdString(mdGet(r,"terminal_numbers","")); right = mdLocalized(r,"function",lang);
+      } else if ("MANUAL".equals(m)) {
+        left = mdLocalized(r,"title",lang); right = mdString(mdGet(r,"revision",""));
+      } else if ("CONTROLLER".equals(m)) {
+        left = mdString(mdGet(r,"controller_name","")); right = mdString(mdGet(r,"revision",""));
+      } else if ("BRAND".equals(m)) {
+        left = mdString(mdGet(r,"brand_name","")); right = mdString(mdGet(r,"country",""));
+      } else {
+        left = mdString(mdGet(r,"id","")); right = mdLocalized(r,"title",lang);
+      }
+      if (right.length() > 0) out.add(left + " | " + right); else out.add(left);
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Returns unique non-empty text values from one MotorDiag record field, preserving first-seen order.")
+  public YailList MotorDiagUniqueField(YailList records, String fieldName) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<String>();
+    if (records != null) {
+      for (int i = 0; i < records.size(); i++) {
+        String value = mdString(mdGet(records.getObject(i), fieldName, "")).trim();
+        if (value.length() > 0 && seen.add(value)) out.add(value);
+      }
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "Validates a decoded MotorDiag controller package before it is stored. Returns [valid,errorCode,controllerId,packageVersion].")
+  public YailList MotorDiagValidatePackage(Object packageObject, String expectedControllerId) {
+    java.util.Map<Object,Object> p = mdMap(packageObject);
+    if (p.isEmpty()) return list(false,"INVALID_PACKAGE","","");
+    Object meta = mdGet(packageObject,"meta",null);
+    if (mdMap(meta).isEmpty()) return list(false,"MISSING_META","","");
+    String controllerId = mdString(mdGet(meta,"controller_id",mdGet(packageObject,"controller_id",""))).trim();
+    String version = mdString(mdGet(meta,"package_version",mdGet(packageObject,"package_version",""))).trim();
+    if (controllerId.length()==0) return list(false,"MISSING_CONTROLLER_ID","",version);
+    if (expectedControllerId != null && expectedControllerId.trim().length()>0
+        && !mdNorm(expectedControllerId).equals(mdNorm(controllerId))) {
+      return list(false,"CONTROLLER_ID_MISMATCH",controllerId,version);
+    }
+    if (version.length()==0) return list(false,"MISSING_PACKAGE_VERSION",controllerId,"");
+    String[] required = new String[]{"faults","led_codes","dip_settings","parameters","terminals","manuals"};
+    for (String key : required) {
+      Object v = mdGet(packageObject,key,null);
+      if (!(v instanceof YailList) && !(v instanceof java.util.List)) return list(false,"MISSING_"+key.toUpperCase(java.util.Locale.ROOT),controllerId,version);
+    }
+    return list(true,"OK",controllerId,version);
+  }
+
+  @SimpleFunction(description = "Resolves one MotorDiag symptom-tree answer. Returns [found,isResult,nextNodeId,resultId,question,checkText,safetyText].")
+  public YailList MotorDiagDiagStep(YailList nodes, String currentNodeId, String answer) {
+    Object node = MotorDiagFindById(nodes,"node_id",currentNodeId);
+    if (mdMap(node).isEmpty()) return list(false,false,"","","","","");
+    String resultId = mdString(mdGet(node,"result_id","")).trim();
+    if (resultId.length()>0) return list(true,true,"",resultId,mdLocalized(node,"question",1),mdLocalized(node,"check_text",1),mdLocalized(node,"safety_text",1));
+    String a = mdNorm(answer);
+    String nextKey = "unknown_next";
+    if ("YES".equals(a) || "IGEN".equals(a) || "Y".equals(a)) nextKey="yes_next";
+    else if ("NO".equals(a) || "NEM".equals(a) || "N".equals(a)) nextKey="no_next";
+    String nextId = mdString(mdGet(node,nextKey,"")).trim();
+    Object next = MotorDiagFindById(nodes,"node_id",nextId);
+    if (mdMap(next).isEmpty()) return list(true,false,nextId,"","","","");
+    String nextResult = mdString(mdGet(next,"result_id","")).trim();
+    return list(true,nextResult.length()>0,nextId,nextResult,mdLocalized(next,"question",1),mdLocalized(next,"check_text",1),mdLocalized(next,"safety_text",1));
+  }
+
+  @SimpleFunction(description = "Returns the GateCraft MotorDiag theme asset record [background,button,back,generalTextColor,buttonTextColor] for default/marka1/marka2/marka3.")
+  public YailList MotorDiagTheme(String theme) {
+    String t = theme == null ? "default" : theme.trim().toLowerCase(java.util.Locale.ROOT);
+    if ("marka1".equals(t)) return list("MAKITAA.jpg","btn_makita.png","back_marka1.png",-1.0d,-1.0d);
+    if ("marka2".equals(t)) return list("Image-1(1).jpg","btn_marka2.png","back_marka2.png",-16777216.0d,-16777216.0d);
+    if ("marka3".equals(t)) return list("milwoukeee.jpg","btn_marka3.png","back_marka3.png",-1.0d,-1.0d);
+    return list("ALAP.jpg","btn_alapd.jpg","back_ALAP.jpg",-16777216.0d,-16777216.0d);
+  }
+
+  @SimpleFunction(description = "Exact ElectroPro manual-size cable calculation using the selected built-in size index. Returns [sizeIndex,areaMm2,adjustedAmpacity,dropPercent,lossW,totalLength,totalCost,status].")
+  public YailList ElectroCableManualCalculate(double currentA, double voltageV, String supplyKind,
+      double lengthM, String material, double sizeIndex, double temperatureFactor,
+      double groupingFactor, double otherFactor, double reservePercent, double meterPrice,
+      double accessoryCost) {
+    int idx = (int) Math.round(sizeIndex);
+    double area = ElectroCableArea(idx);
+    double baseAmpacity = ElectroBaseAmpacity(idx);
+    double tf = temperatureFactor > 0.0d ? temperatureFactor : 1.0d;
+    double gf = groupingFactor > 0.0d ? groupingFactor : 1.0d;
+    double of = otherFactor > 0.0d ? otherFactor : 1.0d;
+    double adjustedAmpacity = baseAmpacity * tf * gf * of;
+    String mat = material == null ? "" : material.toLowerCase(java.util.Locale.ROOT);
+    double rho = (mat.contains("al") || mat.contains("alu")) ? 0.0282d : 0.0175d;
+    double drop = ElectroVoltageDropPercent(area,rho,supplyKind,lengthM,currentA,voltageV);
+    double loss = ElectroCableLossW(area,rho,supplyKind,lengthM,currentA);
+    double totalLength = Math.max(0.0d,lengthM) * (1.0d + Math.max(0.0d,reservePercent)/100.0d);
+    double totalCost = totalLength * Math.max(0.0d,meterPrice) + Math.max(0.0d,accessoryCost);
+    String status;
+    if (idx < 1 || area <= 0.0d || baseAmpacity <= 0.0d) status="INVALID_SIZE";
+    else if (currentA <= 0.0d) status="NO_CURRENT";
+    else status="OK";
+    return list((double)idx,area,adjustedAmpacity,drop,loss,totalLength,totalCost,status);
+  }
