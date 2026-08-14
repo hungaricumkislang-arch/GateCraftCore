@@ -1,4 +1,4 @@
-# GateCraftCore AIX build workflow v2
+# GateCraftCore AIX build workflow v10 - source bundle build
 name: Build GateCraftCore AIX
 
 on:
@@ -32,10 +32,12 @@ jobs:
         run: |
           git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
 
-      - name: Copy GateCraftCore source into build environment
+      - name: Restore GateCraftCore v1 source bundle
         run: |
           rm -rf buildenv/src/*
-          cp -R src/. buildenv/src/
+          cat source_bundle/part*.txt | base64 --decode > /tmp/gatecraftcore-src.tar.gz
+          tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
+          find buildenv/src -maxdepth 8 -type f -print
 
       - name: Build AIX
         run: |
@@ -49,6 +51,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-aix
+          name: GateCraftCore-v1-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
