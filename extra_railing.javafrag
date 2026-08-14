@@ -1,0 +1,89 @@
+  @SimpleFunction(description = "Exact GateCraft railing profile lookup. Returns [kgPerMeter, weldPerItem, paintM2PerItem] while preserving existing values where the original Blockly branch leaves them unchanged.")
+  public YailList RailingProfileData(String role, double typeIndex, double sizeIndex, double auxiliaryIndex,
+      double customKgPerMeter, double currentWeld, double currentM2) {
+    String r = role == null ? "" : role.toLowerCase(java.util.Locale.US);
+    int t = (int) Math.round(typeIndex);
+    int s = (int) Math.round(sizeIndex);
+    int aux = (int) Math.round(auxiliaryIndex);
+    double kg = customKgPerMeter;
+    double weld = currentWeld;
+    double m2 = currentM2;
+
+    if ("post".equals(r)) {
+      if (t == 1) {
+        if (s == 1) { kg=2.38; weld=.32; m2=.160; }
+        else if (s == 2) { kg=3.10; weld=.40; m2=.200; }
+        else if (s == 3) { kg=3.10; weld=.40; m2=.200; }
+        else if (s == 4) { kg=3.64; weld=.48; m2=.240; }
+        else if (s == 5) { kg=3.64; weld=.56; m2=.320; }
+        else if (s == 6) { kg=customKgPerMeter; m2=.160; }
+      } else if (t == 2) {
+        if (s == 1) { kg=1.56; weld=.11; m2=.106; }
+        else if (s == 2) { kg=1.99; weld=.13; m2=.133; }
+        else if (s == 3) { kg=2.28; weld=.15; m2=.152; }
+        else if (s == 4) { kg=2.88; weld=.19; m2=.189; }
+        else if (aux == 5) { kg=customKgPerMeter; m2=.106; }
+      } else if (t == 3) {
+        if (s == 1) { kg=2.51; weld=.08; m2=.090; }
+        else if (s == 2) { kg=3.14; weld=.10; m2=.110; }
+        else if (s == 3) { kg=4.71; weld=.132; m2=.160; }
+        else if (s == 4) { kg=customKgPerMeter; m2=.090; }
+      } else if (t == 4) {
+        if (s == 1) { kg=2.00; weld=.13; m2=.133; }
+        else if (s == 2) { kg=2.30; weld=.15; m2=.152; }
+        else if (s == 3) { kg=customKgPerMeter; m2=.133; }
+      } else if (t == 5) {
+        kg=customKgPerMeter; m2=.133;
+      }
+    } else if ("handrail".equals(r)) {
+      if (t == 1) {
+        if (s == 1) { kg=1.76; weld=.10; m2=.120; }
+        else if (s == 2) { kg=2.38; weld=.12; m2=.160; }
+        else if (s == 3) { kg=2.38; weld=.13; m2=.160; }
+        else if (s == 4) { kg=3.01; weld=.14; m2=.180; }
+        else if (s == 5) { kg=3.64; weld=.15; m2=.180; }
+        else if (s == 6) { kg=customKgPerMeter; weld=.10; m2=.160; }
+      } else if (t == 2) {
+        if (s == 1) { kg=1.56; weld=.10; m2=.106; }
+        else if (s == 2) { kg=1.99; weld=.12; m2=.133; }
+        else if (s == 3) { kg=2.28; weld=.14; m2=.152; }
+        else if (s == 4) { kg=customKgPerMeter; weld=.106; }
+      } else if (t == 3) {
+        if (s == 1 || s == 2) kg=0.0;
+        else kg=customKgPerMeter;
+      } else if (t == 4) {
+        if (s == 1) { kg=2.00; weld=.10; m2=.106; }
+        else if (s == 2) { kg=2.30; weld=.12; m2=.133; }
+        else if (s == 3) { kg=customKgPerMeter; weld=.10; m2=.106; }
+      }
+    } else if ("rail".equals(r)) {
+      if (t == 1) {
+        if (s == 1) { kg=1.44; weld=.08; m2=.100; }
+        else if (s == 2) { kg=1.76; weld=.10; m2=.120; }
+        else if (s == 3) { kg=2.38; weld=.11; m2=.160; }
+        else if (s == 4) { kg=2.38; weld=.12; m2=.160; }
+        else if (s == 5) { kg=customKgPerMeter; weld=.10; m2=.100; }
+      } else if (t == 2) {
+        if (s == 1) { kg=1.23; weld=.04; m2=.085; }
+        else if (s == 2) { kg=1.56; weld=.05; m2=.106; }
+        else if (s == 3) { kg=1.99; weld=.06; m2=.133; }
+        else if (s == 4) { kg=customKgPerMeter; weld=.05; m2=.085; }
+      } else if (t == 3) {
+        if (s == 1) { kg=1.18; weld=.06; m2=.070; }
+        else if (s == 2) { kg=1.57; weld=.08; m2=.090; }
+        else if (s == 3) { kg=2.367; weld=.10; m2=.115; }
+        else if (s == 4) { kg=customKgPerMeter; weld=.080; m2=0.0; }
+      } else if (t == 4) {
+        if (s == 1) { kg=2.20; weld=.08; m2=.120; }
+        else if (s == 2) { kg=2.90; weld=.09; m2=.160; }
+        else if (s == 3) { kg=3.80; weld=.10; m2=.180; }
+        else if (s == 4) { kg=customKgPerMeter; weld=.08; m2=.120; }
+      }
+    } else if ("stiffener".equals(r)) {
+      if (t == 1) { kg=1.13; weld=.08; m2=.080; }
+      else if (t == 2) { kg=1.57; weld=.08; m2=.090; }
+      else if (t == 3) { kg=.888; weld=.06; m2=.038; }
+      else { kg=customKgPerMeter; }
+    }
+    return list(kg, weld, m2);
+  }
