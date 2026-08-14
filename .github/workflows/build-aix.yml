@@ -1,4 +1,4 @@
-# GateCraftCore AIX build workflow v10 - source bundle build
+# GateCraftCore AIX build workflow v11 - source bundle + exact migration helpers
 name: Build GateCraftCore AIX
 
 on:
@@ -39,6 +39,25 @@ jobs:
           tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
           find buildenv/src -maxdepth 8 -type f -print
 
+      - name: Inject GateCraftCore v1.1 exact helpers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          matches = list(Path('buildenv/src').rglob('GateCraftCore.java'))
+          if len(matches) != 1:
+              raise SystemExit('Expected exactly one GateCraftCore.java, found %d' % len(matches))
+          p = matches[0]
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('version = 10', 'version = 11', 1)
+          s = s.replace('return "1.0.0";', 'return "1.1.0";', 1)
+          frag = Path('extra_methods.javafrag').read_text(encoding='utf-8')
+          pos = s.rfind('}')
+          if pos < 0:
+              raise SystemExit('Could not locate class closing brace')
+          p.write_text(s[:pos] + '\n' + frag + '\n' + s[pos:], encoding='utf-8')
+          print('patched', p)
+          PY
+
       - name: Build AIX
         run: |
           cd buildenv
@@ -51,6 +70,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-v1-aix
+          name: GateCraftCore-v1.1-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
