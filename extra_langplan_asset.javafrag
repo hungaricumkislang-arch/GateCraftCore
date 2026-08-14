@@ -1,0 +1,92 @@
+  private static final class GcLangPlanOps {
+    int[] componentIndexes;
+    String[] properties;
+    String[] values;
+  }
+
+  private static final class GcLangPlanRecord {
+    int componentCount;
+    GcLangPlanOps[] languages;
+  }
+
+  private java.util.HashMap<String, GcLangPlanRecord> gcLangPlanCache = null;
+  private String gcLangPlanLoadError = "";
+
+  private synchronized void gcEnsureLangPlans() {
+    if (gcLangPlanCache != null) return;
+    java.util.HashMap<String, GcLangPlanRecord> loaded = new java.util.HashMap<String, GcLangPlanRecord>();
+    java.io.InputStream raw = null;
+    java.util.zip.GZIPInputStream gzip = null;
+    try {
+      raw = com.google.appinventor.components.runtime.util.MediaUtil.openMedia(form, "gc_langplan.dat");
+      gzip = new java.util.zip.GZIPInputStream(raw);
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      byte[] buffer = new byte[4096];
+      int n;
+      while ((n = gzip.read(buffer)) >= 0) if (n > 0) out.write(buffer, 0, n);
+      String data = new String(out.toByteArray(), "UTF-8");
+      String[] fields = data.length() == 0 ? new String[0] : data.split("\\u0000", -1);
+      int pos = 0;
+      while (pos < fields.length) {
+        if (pos + 1 >= fields.length) throw new java.io.IOException("Truncated gc_langplan.dat header");
+        String key = fields[pos++];
+        GcLangPlanRecord rec = new GcLangPlanRecord();
+        rec.componentCount = Integer.parseInt(fields[pos++]);
+        rec.languages = new GcLangPlanOps[6];
+        for (int lang = 0; lang < 6; lang++) {
+          if (pos >= fields.length) throw new java.io.IOException("Truncated language header " + key);
+          int count = Integer.parseInt(fields[pos++]);
+          GcLangPlanOps ops = new GcLangPlanOps();
+          ops.componentIndexes = new int[count];
+          ops.properties = new String[count];
+          ops.values = new String[count];
+          for (int i = 0; i < count; i++) {
+            if (pos + 2 >= fields.length) throw new java.io.IOException("Truncated language ops " + key);
+            ops.componentIndexes[i] = Integer.parseInt(fields[pos++]);
+            ops.properties[i] = fields[pos++];
+            ops.values[i] = fields[pos++];
+          }
+          rec.languages[lang] = ops;
+        }
+        loaded.put(key, rec);
+      }
+      gcLangPlanLoadError = "";
+    } catch (Throwable ex) {
+      gcLangPlanLoadError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      loaded.clear();
+    } finally {
+      try { if (gzip != null) gzip.close(); else if (raw != null) raw.close(); } catch (Throwable ignored) { }
+    }
+    gcLangPlanCache = loaded;
+  }
+
+  @SimpleFunction(description = "Applies one exact six-language GateCraft UI operation plan to concrete supplied components. The stored operation order, including deliberate repeated setters, is preserved exactly.")
+  public double BatchApplyLangPlan(YailList components, String planKey, double languageIndex) {
+    gcEnsureLangPlans();
+    if (components == null || gcLangPlanCache == null || planKey == null) return 0.0d;
+    GcLangPlanRecord rec = gcLangPlanCache.get(planKey);
+    if (rec == null || rec.languages == null || components.size() != rec.componentCount) return 0.0d;
+    int lang = (int) Math.round(languageIndex);
+    if (lang < 1 || lang > 6) lang = 1;
+    GcLangPlanOps ops = rec.languages[lang - 1];
+    if (ops == null) return 0.0d;
+    int ok = 0;
+    for (int i = 0; i < ops.componentIndexes.length; i++) {
+      int componentIndex = ops.componentIndexes[i];
+      if (componentIndex < 1 || componentIndex > components.size()) return 0.0d;
+      if (gcSetProperty(components.getObject(componentIndex - 1), ops.properties[i], ops.values[i])) ok++;
+    }
+    return ok;
+  }
+
+  @SimpleFunction(description = "Returns the number of loaded exact GateCraft language UI plans.")
+  public double LangPlanCount() {
+    gcEnsureLangPlans();
+    return gcLangPlanCache == null ? 0.0d : gcLangPlanCache.size();
+  }
+
+  @SimpleFunction(description = "Returns the last exact language-plan asset load error, or empty string on success.")
+  public String LangPlanError() {
+    gcEnsureLangPlans();
+    return gcLangPlanLoadError == null ? "" : gcLangPlanLoadError;
+  }
