@@ -25,26 +25,26 @@
       int n;
       while ((n = gzip.read(buffer)) >= 0) if (n > 0) out.write(buffer, 0, n);
       String data = new String(out.toByteArray(), "UTF-8");
-      String[] fields = data.length() == 0 ? new String[0] : data.split("\\u0000", -1);
+      java.util.ArrayList<String> fields = gcSplitNulFields(data);
       int pos = 0;
-      while (pos < fields.length) {
-        if (pos + 1 >= fields.length) throw new java.io.IOException("Truncated gc_langplan.dat header");
-        String key = fields[pos++];
+      while (pos < fields.size()) {
+        if (pos + 1 >= fields.size()) throw new java.io.IOException("Truncated gc_langplan.dat header");
+        String key = fields.get(pos++);
         GcLangPlanRecord rec = new GcLangPlanRecord();
-        rec.componentCount = Integer.parseInt(fields[pos++]);
+        rec.componentCount = Integer.parseInt(fields.get(pos++));
         rec.languages = new GcLangPlanOps[6];
         for (int lang = 0; lang < 6; lang++) {
-          if (pos >= fields.length) throw new java.io.IOException("Truncated language header " + key);
-          int count = Integer.parseInt(fields[pos++]);
+          if (pos >= fields.size()) throw new java.io.IOException("Truncated language header " + key);
+          int count = Integer.parseInt(fields.get(pos++));
           GcLangPlanOps ops = new GcLangPlanOps();
           ops.componentIndexes = new int[count];
           ops.properties = new String[count];
           ops.values = new String[count];
           for (int i = 0; i < count; i++) {
-            if (pos + 2 >= fields.length) throw new java.io.IOException("Truncated language ops " + key);
-            ops.componentIndexes[i] = Integer.parseInt(fields[pos++]);
-            ops.properties[i] = fields[pos++];
-            ops.values[i] = fields[pos++];
+            if (pos + 2 >= fields.size()) throw new java.io.IOException("Truncated language ops " + key);
+            ops.componentIndexes[i] = Integer.parseInt(fields.get(pos++));
+            ops.properties[i] = fields.get(pos++);
+            ops.values[i] = fields.get(pos++);
           }
           rec.languages[lang] = ops;
         }
@@ -60,23 +60,21 @@
     gcLangPlanCache = loaded;
   }
 
-  @SimpleFunction(description = "Applies one exact six-language GateCraft UI operation plan to concrete supplied components. The stored operation order, including deliberate repeated setters, is preserved exactly.")
-  public double BatchApplyLangPlan(YailList components, String planKey, double languageIndex) {
+  @SimpleFunction(description = "Applies one exact six-language GateCraft UI operation plan to concrete supplied components. Stored operation order, including deliberate repeated setters, is preserved exactly.")
+  public void BatchApplyLangPlan(YailList components, String planKey, double languageIndex) {
     gcEnsureLangPlans();
-    if (components == null || gcLangPlanCache == null || planKey == null) return 0.0d;
+    if (components == null || gcLangPlanCache == null || planKey == null) return;
     GcLangPlanRecord rec = gcLangPlanCache.get(planKey);
-    if (rec == null || rec.languages == null || components.size() != rec.componentCount) return 0.0d;
+    if (rec == null || rec.languages == null || components.size() != rec.componentCount) return;
     int lang = (int) Math.round(languageIndex);
     if (lang < 1 || lang > 6) lang = 1;
     GcLangPlanOps ops = rec.languages[lang - 1];
-    if (ops == null) return 0.0d;
-    int ok = 0;
+    if (ops == null) return;
     for (int i = 0; i < ops.componentIndexes.length; i++) {
       int componentIndex = ops.componentIndexes[i];
-      if (componentIndex < 1 || componentIndex > components.size()) return 0.0d;
-      if (gcSetProperty(components.getObject(componentIndex - 1), ops.properties[i], ops.values[i])) ok++;
+      if (componentIndex < 1 || componentIndex > components.size()) return;
+      gcSetProperty(components.getObject(componentIndex - 1), ops.properties[i], ops.values[i]);
     }
-    return ok;
   }
 
   @SimpleFunction(description = "Returns the number of loaded exact GateCraft language UI plans.")
