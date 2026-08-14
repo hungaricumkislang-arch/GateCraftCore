@@ -6,6 +6,19 @@
   private java.util.HashMap<String, GcTextOpsRecord> gcTextOpsCache = null;
   private String gcTextOpsLoadError = "";
 
+  private java.util.ArrayList<String> gcSplitNulFields(String data) {
+    java.util.ArrayList<String> fields = new java.util.ArrayList<String>();
+    if (data == null || data.length() == 0) return fields;
+    int start = 0;
+    for (int i = 0; i <= data.length(); i++) {
+      if (i == data.length() || data.charAt(i) == 0) {
+        fields.add(data.substring(start, i));
+        start = i + 1;
+      }
+    }
+    return fields;
+  }
+
   private synchronized void gcEnsureTextOps() {
     if (gcTextOpsCache != null) return;
     java.util.HashMap<String, GcTextOpsRecord> loaded = new java.util.HashMap<String, GcTextOpsRecord>();
@@ -19,19 +32,19 @@
       int n;
       while ((n = gzip.read(buffer)) >= 0) if (n > 0) out.write(buffer, 0, n);
       String data = new String(out.toByteArray(), "UTF-8");
-      String[] fields = data.length() == 0 ? new String[0] : data.split("\\u0000", -1);
+      java.util.ArrayList<String> fields = gcSplitNulFields(data);
       int pos = 0;
-      while (pos < fields.length) {
-        if (pos + 1 >= fields.length) throw new java.io.IOException("Truncated gc_textops.dat header");
-        String key = fields[pos++];
-        int count = Integer.parseInt(fields[pos++]);
+      while (pos < fields.size()) {
+        if (pos + 1 >= fields.size()) throw new java.io.IOException("Truncated gc_textops.dat header");
+        String key = fields.get(pos++);
+        int count = Integer.parseInt(fields.get(pos++));
         GcTextOpsRecord rec = new GcTextOpsRecord();
         rec.properties = new String[count];
         rec.values = new String[count];
         for (int i = 0; i < count; i++) {
-          if (pos + 1 >= fields.length) throw new java.io.IOException("Truncated gc_textops.dat record " + key);
-          rec.properties[i] = fields[pos++];
-          rec.values[i] = fields[pos++];
+          if (pos + 1 >= fields.size()) throw new java.io.IOException("Truncated gc_textops.dat record " + key);
+          rec.properties[i] = fields.get(pos++);
+          rec.values[i] = fields.get(pos++);
         }
         loaded.put(key, rec);
       }
@@ -45,18 +58,16 @@
     gcTextOpsCache = loaded;
   }
 
-  @SimpleFunction(description = "Applies an exact prevalidated sequence of Text/ElementsFromString operations to the supplied concrete App Inventor components. The component count must exactly match the bundled operation record.")
-  public double BatchApplyTextOps(YailList components, String groupKey) {
+  @SimpleFunction(description = "Applies an exact prevalidated sequence of Text/ElementsFromString operations to supplied concrete App Inventor components. The component count must exactly match the bundled operation record.")
+  public void BatchApplyTextOps(YailList components, String groupKey) {
     gcEnsureTextOps();
-    if (components == null || gcTextOpsCache == null || groupKey == null) return 0.0d;
+    if (components == null || gcTextOpsCache == null || groupKey == null) return;
     GcTextOpsRecord rec = gcTextOpsCache.get(groupKey);
-    if (rec == null || rec.properties == null || rec.values == null) return 0.0d;
-    if (components.size() != rec.properties.length || rec.properties.length != rec.values.length) return 0.0d;
-    int ok = 0;
+    if (rec == null || rec.properties == null || rec.values == null) return;
+    if (components.size() != rec.properties.length || rec.properties.length != rec.values.length) return;
     for (int i = 0; i < rec.properties.length; i++) {
-      if (gcSetProperty(components.getObject(i), rec.properties[i], rec.values[i])) ok++;
+      gcSetProperty(components.getObject(i), rec.properties[i], rec.values[i]);
     }
-    return ok;
   }
 
   @SimpleFunction(description = "Returns the number of loaded exact GateCraft text-operation records.")
