@@ -1,0 +1,79 @@
+  @SimpleFunction(description = "Exact current GateCraft missing-3D calculator. Preserves the existing Blockly branch set and historical formulas/quirks. Returns [missingResult, volume, surface, diagonal, lateralSurface, capacityLiter, length, width, height, radius, diameter, formula].")
+  public YailList GeoCalculateMissing3DExact(String shape, String target, double knownVolume,
+      double length, double width, double height, double radius, double diameter, double quantity) {
+    final double PI_EXACT = 3.14159d;
+    double missingResult = 0.0d;
+    double volume = 0.0d;
+    double surface = 0.0d;
+    double diagonal = 0.0d;
+    double lateralSurface = 0.0d;
+    double capacityLiter = 0.0d;
+    String formula = "";
+    String s = shape == null ? "" : shape.toLowerCase(java.util.Locale.US);
+    String t = target == null ? "" : target.toLowerCase(java.util.Locale.US);
+
+    if ("box".equals(s) && "box_length_from_volume".equals(t)) {
+      // Preserve the current Blockly formula exactly: height * height (not width * height).
+      length = knownVolume / (height * height);
+      missingResult = length;
+      volume = knownVolume;
+      surface = 2.0d * ((length * width) + (length * height) + (width * height));
+      diagonal = Math.sqrt((width * width) + (height * height) + (length * length));
+      capacityLiter = volume * 1000.0d;
+      formula = "L = V / (W x H)";
+    } else if ("box".equals(s) && "box_width_from_volume".equals(t)) {
+      width = knownVolume / (length * height);
+      missingResult = width;
+      volume = knownVolume;
+      surface = 2.0d * ((length * width) + (length * height) + (width * height));
+      diagonal = Math.sqrt((width * width) + (height * height) + (length * length));
+      capacityLiter = volume * 1000.0d;
+      formula = "W = V / (L x H)";
+    } else if ("box".equals(s) && "box_height_from_volume".equals(t)) {
+      height = knownVolume / (length * width);
+      missingResult = height;
+      volume = knownVolume;
+      surface = 2.0d * ((length * width) + (length * height) + (width * height));
+      diagonal = Math.sqrt((width * width) + (height * height) + (length * length));
+      capacityLiter = volume * 1000.0d;
+      formula = "H = V / (L x W)";
+    } else if (("cylinder".equals(s) && "cylinder_height_from_volume".equals(t)) ||
+               ("tank".equals(s) && "tank_height_from_volume".equals(t))) {
+      if (diameter > 0.0d) radius = diameter / 2.0d;
+      height = knownVolume / (PI_EXACT * radius * radius);
+      missingResult = height;
+      volume = knownVolume;
+      lateralSurface = 2.0d * PI_EXACT * radius * height;
+      surface = lateralSurface + (2.0d * PI_EXACT * radius * radius);
+      capacityLiter = volume * 1000.0d;
+      formula = "H = V / (PI x r2)";
+    } else if (("cylinder".equals(s) && "cylinder_radius_from_volume".equals(t)) ||
+               ("tank".equals(s) && "tank_radius_from_volume".equals(t))) {
+      radius = Math.sqrt(knownVolume / (PI_EXACT * height));
+      // Preserve the existing Blockly quirk: the current diameter is doubled here.
+      diameter = diameter * 2.0d;
+      missingResult = radius;
+      volume = knownVolume;
+      lateralSurface = 2.0d * PI_EXACT * radius * height;
+      surface = lateralSurface + (2.0d * PI_EXACT * radius * radius);
+      capacityLiter = volume * 1000.0d;
+      formula = "√ (V / (PI x H)";
+    } else if (("cylinder".equals(s) && "cylinder_diameter_from_volume".equals(t)) ||
+               ("tank".equals(s) && "tank_diameter_from_volume".equals(t))) {
+      radius = Math.sqrt(knownVolume / (PI_EXACT * height));
+      diameter = radius * 2.0d;
+      missingResult = diameter;
+      volume = knownVolume;
+      lateralSurface = 2.0d * PI_EXACT * radius * height;
+      surface = lateralSurface + (2.0d * PI_EXACT * radius * radius);
+      capacityLiter = volume * 1000.0d;
+      formula = "2 X √ (V / (PI x H)";
+    }
+
+    volume = volume * quantity;
+    surface = surface * quantity;
+    lateralSurface = lateralSurface * quantity;
+    capacityLiter = volume * 1000.0d;
+    return list(missingResult, volume, surface, diagonal, lateralSurface, capacityLiter,
+        length, width, height, radius, diameter, formula);
+  }
