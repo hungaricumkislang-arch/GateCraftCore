@@ -1,0 +1,123 @@
+  private String weldOpt(YailList values, int index) {
+    Object v = ListSafeGet(values, index, "");
+    return v == null ? "" : String.valueOf(v);
+  }
+
+  @SimpleFunction(description = "Exact GateCraft welding material density used by the welding project module.")
+  public double WeldingDensityExact(String material) {
+    if ("Steel".equals(material)) return 7850.0d;
+    if ("Stainless".equals(material)) return 8000.0d;
+    if ("Aluminium".equals(material)) return 2700.0d;
+    return 0.0d;
+  }
+
+  @SimpleFunction(description = "Exact GateCraft welding warning/technical-info builder. Returns [warningText, techInfoText].")
+  public YailList WeldingWarningsExact(YailList optValues, String weldTypeAdviceText,
+      String positionRiskText, double consumptionResult, double speedResult, double thickness,
+      double totalWeldLength, String position, String process, double gasBottlePercent,
+      double fluxCleaningPercent, double heatInput, double heatInputLimit, double wireDiameter,
+      String material, double cuttingDiscCount, double grindingDiscCount, String discSize,
+      double totalWorkTimeMin, double consumableCost, double laborCost, String weldType) {
+    StringBuilder warning = new StringBuilder();
+    StringBuilder tech = new StringBuilder();
+    tech.append(weldTypeAdviceText == null ? "" : weldTypeAdviceText).append("\n");
+    tech.append(positionRiskText == null ? "" : positionRiskText).append("\n");
+    if (consumptionResult <= 0.0d) warning.append(weldOpt(optValues,105)).append("\n");
+    if (speedResult <= 0.0d) warning.append(weldOpt(optValues,106)).append("\n");
+    if (thickness < 2.0d && totalWeldLength > 8.0d) warning.append(weldOpt(optValues,107)).append("\n");
+    if ("PE".equals(position)) warning.append(weldOpt(optValues,104)).append("\n");
+    if ("mma".equals(process) && thickness < 2.0d) warning.append(weldOpt(optValues,103)).append("\n");
+    if (gasBottlePercent > 80.0d) warning.append(weldOpt(optValues,102)).append("\n");
+    if ("flux".equals(process) && fluxCleaningPercent > 15.0d) warning.append(weldOpt(optValues,108)).append("\n");
+    if (heatInput > heatInputLimit) warning.append(weldOpt(optValues,109)).append("\n");
+    if (heatInput > 20.0d) tech.append(weldOpt(optValues,110)).append("\n");
+    if ("tig".equals(process) && thickness > 5.0d) tech.append(weldOpt(optValues,111)).append("\n");
+    if ("mig".equals(process) && wireDiameter == 16.0d) warning.append(weldOpt(optValues,112)).append("\n");
+    if ("mig".equals(process) && wireDiameter == 8.0d) tech.append(weldOpt(optValues,113)).append("\n");
+    if ("aluminium".equals(material)) tech.append(weldOpt(optValues,114)).append("\n");
+    if ("stainless".equals(material)) tech.append(weldOpt(optValues,115)).append("\n");
+    if (cuttingDiscCount > 5.0d) tech.append(weldOpt(optValues,116)).append("\n");
+    if (grindingDiscCount > 5.0d) tech.append(weldOpt(optValues,117)).append("\n");
+    if ("115".equals(discSize)) tech.append(weldOpt(optValues,118)).append("\n");
+    if ("230".equals(discSize)) tech.append(weldOpt(optValues,119)).append("\n");
+    if (totalWorkTimeMin > 480.0d) warning.append(weldOpt(optValues,120)).append("\n");
+    if (consumableCost > laborCost) tech.append(weldOpt(optValues,121)).append("\n");
+    if ("v".equals(weldType) && thickness < 4.0d) warning.append(weldOpt(optValues,80)).append("\n");
+    if ("tack".equals(weldType)) tech.append(weldOpt(optValues,81)).append("\n");
+    if ("pf".equals(position) || "pe".equals(position)) tech.append(weldOpt(optValues,82)).append("\n");
+    return list(warning.toString(), tech.toString());
+  }
+
+  @SimpleFunction(description = "Exact GateCraft welding filler/consumable calculation. Returns fillerKg, fillerCost, passCount, electrodeWeight, electrodeCount, efficiencies and weld-mass values.")
+  public YailList WeldingFillerExact(String material, String process, double weldLength,
+      double totalWeldLength, double consumptionResult, double weldTypeFactor,
+      double positionConsumableFactor, double passCount, double thickness,
+      double stumpLossPercent, double electrodeWeightPiece, double wireEfficiency,
+      double electrodeEfficiency, double rodEfficiency, double fluxWireEfficiency,
+      double wirePriceKg, double electrodePriceKg, double rodPriceKg, double fluxWirePriceKg) {
+    double fillerKg = 0.0d;
+    double fillerCost = 0.0d;
+    double electrodeCount = 0.0d;
+    if (passCount <= 0.0d) passCount = 1.0d;
+    double density = WeldingDensityExact(material);
+    double weldArea = thickness * thickness * passCount;
+    double weldVolume = (totalWeldLength * weldArea) / 1000000000.0d;
+    double weldWeight = weldVolume * density;
+
+    if (consumptionResult > 0.0d) {
+      fillerKg = (weldLength / 1000.0d) * consumptionResult;
+      fillerKg *= weldTypeFactor;
+      fillerKg *= positionConsumableFactor;
+      fillerKg *= passCount;
+      if ("mig".equals(process)) {
+        fillerCost = fillerKg * wirePriceKg;
+      }
+      if ("mma".equals(process)) {
+        // Preserve current Blockly formula exactly, including its historical percentage structure.
+        fillerKg = fillerKg * ((1.0d + stumpLossPercent) / 100.0d);
+        if (electrodeWeightPiece <= 0.0d) electrodeWeightPiece = 0.035d;
+        electrodeCount = Math.ceil(fillerKg / electrodeWeightPiece);
+        fillerCost = fillerKg * electrodePriceKg;
+      }
+      if ("tig".equals(process)) fillerCost = fillerKg * rodPriceKg;
+      if ("flux".equals(process)) fillerCost = fillerKg * fluxWirePriceKg;
+    }
+
+    if (consumptionResult <= 0.0d) {
+      // Current procedure calls weld-mass calculation again here; values are mathematically identical.
+      if ("mig".equals(process)) {
+        if (wireEfficiency <= 0.0d) wireEfficiency = 0.85d;
+        fillerKg = weldWeight / wireEfficiency;
+        fillerKg *= weldTypeFactor;
+        fillerKg *= positionConsumableFactor;
+        fillerCost = fillerKg * wirePriceKg;
+      }
+      if ("mma".equals(process)) {
+        if (electrodeEfficiency <= 0.0d) electrodeEfficiency = 0.65d;
+        if (electrodeWeightPiece <= 0.0d) electrodeWeightPiece = 0.035d;
+        fillerKg = weldWeight / electrodeEfficiency;
+        fillerKg *= weldTypeFactor;
+        fillerKg *= positionConsumableFactor;
+        fillerKg *= (1.0d + (stumpLossPercent / 100.0d));
+        electrodeCount = Math.ceil(fillerKg / electrodeWeightPiece);
+        fillerCost = fillerKg * electrodePriceKg;
+      }
+      if ("tig".equals(process)) {
+        if (rodEfficiency <= 0.0d) rodEfficiency = 0.90d;
+        fillerKg = weldWeight / rodEfficiency;
+        fillerKg *= weldTypeFactor;
+        fillerKg *= positionConsumableFactor;
+        fillerCost = fillerKg * rodPriceKg;
+      }
+      if ("flux".equals(process)) {
+        if (fluxWireEfficiency <= 0.0d) fluxWireEfficiency = 0.80d;
+        fillerKg = weldWeight / fluxWireEfficiency;
+        fillerKg *= weldTypeFactor;
+        fillerKg *= positionConsumableFactor;
+        fillerCost = fillerKg * fluxWirePriceKg;
+      }
+    }
+    return list(fillerKg, fillerCost, passCount, electrodeWeightPiece, electrodeCount,
+        wireEfficiency, electrodeEfficiency, rodEfficiency, fluxWireEfficiency,
+        weldArea, weldVolume, weldWeight, density);
+  }
