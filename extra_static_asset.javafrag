@@ -1,0 +1,72 @@
+  private java.util.HashMap<String, YailList> gcStaticListCache = null;
+  private String gcStaticListLoadError = "";
+
+  private synchronized void gcEnsureStaticLists() {
+    if (gcStaticListCache != null) return;
+    java.util.HashMap<String, YailList> loaded = new java.util.HashMap<String, YailList>();
+    java.io.InputStream raw = null;
+    java.util.zip.GZIPInputStream gzip = null;
+    try {
+      raw = com.google.appinventor.components.runtime.util.MediaUtil.openMedia(form, "gc_static.dat");
+      gzip = new java.util.zip.GZIPInputStream(raw);
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      byte[] buffer = new byte[4096];
+      int n;
+      while ((n = gzip.read(buffer)) >= 0) {
+        if (n > 0) out.write(buffer, 0, n);
+      }
+      String data = new String(out.toByteArray(), "UTF-8");
+      java.util.ArrayList<String> fields = new java.util.ArrayList<String>();
+      int start = 0;
+      for (int i = 0; i <= data.length(); i++) {
+        if (i == data.length() || data.charAt(i) == 0) {
+          fields.add(data.substring(start, i));
+          start = i + 1;
+        }
+      }
+      int pos = 0;
+      while (pos < fields.size()) {
+        if (pos + 1 >= fields.size()) throw new java.io.IOException("Truncated gc_static.dat header");
+        String key = fields.get(pos++);
+        int count = Integer.parseInt(fields.get(pos++));
+        java.util.ArrayList<Object> values = new java.util.ArrayList<Object>();
+        for (int i = 0; i < count; i++) {
+          if (pos + 1 >= fields.size()) throw new java.io.IOException("Truncated gc_static.dat values");
+          String type = fields.get(pos++);
+          String value = fields.get(pos++);
+          if ("s".equals(type)) values.add(value);
+          else if ("n".equals(type)) values.add(Double.valueOf(value));
+          else if ("b".equals(type)) values.add(Boolean.valueOf("TRUE".equalsIgnoreCase(value) || "true".equalsIgnoreCase(value)));
+          else throw new java.io.IOException("Unknown gc_static.dat type: " + type);
+        }
+        loaded.put(key, YailList.makeList(values));
+      }
+      gcStaticListLoadError = "";
+    } catch (Throwable ex) {
+      gcStaticListLoadError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      loaded.clear();
+    } finally {
+      try { if (gzip != null) gzip.close(); else if (raw != null) raw.close(); } catch (Throwable ignored) { }
+    }
+    gcStaticListCache = loaded;
+  }
+
+  @SimpleFunction(description = "Returns one exact GateCraft flat static list stored in the bundled compressed gc_static.dat asset.")
+  public YailList StaticList(String key) {
+    gcEnsureStaticLists();
+    if (gcStaticListCache == null || key == null) return YailList.makeEmptyList();
+    YailList result = gcStaticListCache.get(key);
+    return result == null ? YailList.makeEmptyList() : result;
+  }
+
+  @SimpleFunction(description = "Returns the number of loaded GateCraft compressed static-list records.")
+  public double StaticListCount() {
+    gcEnsureStaticLists();
+    return gcStaticListCache == null ? 0.0d : gcStaticListCache.size();
+  }
+
+  @SimpleFunction(description = "Returns the last GateCraft compressed static-list load error, or empty string on success.")
+  public String StaticListError() {
+    gcEnsureStaticLists();
+    return gcStaticListLoadError == null ? "" : gcStaticListLoadError;
+  }
