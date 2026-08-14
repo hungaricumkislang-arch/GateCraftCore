@@ -1,4 +1,4 @@
-# GateCraftCore AIX build workflow v23 - brutal-build exact core + MotorDiag
+# GateCraftCore AIX build workflow v24 - brutal-build exact core + complete MotorDiag
 name: Build GateCraftCore AIX
 
 on:
@@ -39,7 +39,7 @@ jobs:
           tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
           find buildenv/src -maxdepth 8 -type f -print
 
-      - name: Inject GateCraftCore v2.3 MotorDiag helpers
+      - name: Inject GateCraftCore v2.4 MotorDiag helpers
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -48,15 +48,15 @@ jobs:
               raise SystemExit('Expected exactly one GateCraftCore.java, found %d' % len(matches))
           p = matches[0]
           s = p.read_text(encoding='utf-8')
-          s = s.replace('version = 10', 'version = 23', 1)
-          s = s.replace('return "1.0.0";', 'return "2.3.0";', 1)
+          s = s.replace('version = 10', 'version = 24', 1)
+          s = s.replace('return "1.0.0";', 'return "2.4.0";', 1)
           fragments = []
           for fp in [
               'extra_methods.javafrag', 'extra_names.javafrag', 'extra_algorithms.javafrag',
               'extra_railing.javafrag', 'extra_welding.javafrag', 'extra_defaults.javafrag',
               'extra_geo_missing3d.javafrag', 'extra_batch.javafrag', 'extra_lang_asset.javafrag',
               'extra_static_asset.javafrag', 'extra_textops_asset.javafrag', 'extra_langplan_asset.javafrag',
-              'extra_motordiag.javafrag']:
+              'extra_motordiag.javafrag', 'extra_motordiag_userdata.javafrag']:
               fragments.append(Path(fp).read_text(encoding='utf-8'))
           pos = s.rfind('}')
           if pos < 0:
@@ -77,6 +77,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-v2.3-aix
+          name: GateCraftCore-v2.4-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
