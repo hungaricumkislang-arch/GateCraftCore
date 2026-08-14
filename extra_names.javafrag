@@ -1,0 +1,42 @@
+  @SimpleFunction(description = "Returns the exact localized GateCraft fixed-material display name used by the Summary inventory mapping.")
+  public String FixedMaterialDisplayName(double selectionIndex, String rectangularTubeLabel,
+      String sheet2mmName, YailList optValues) {
+    int i = (int) Math.round(selectionIndex);
+    if (i <= 1 || i > 48) {
+      return "";
+    }
+    final String[] tubeNames = new String[] {
+      "20x20x2 - 6 m", "30x30x2 - 6 m", "40x40x2 - 6 m", "60x60x2 - 6 m",
+      "80x80x2 - 6 m", "100x100x2 - 6 m", "40x20x2 - 6 m", "60x40x2 - 6 m",
+      "20x20x3 - 6 m", "30x30x3 - 6 m", "40x40x3 - 6 m", "60x60x3 - 6 m",
+      "80x80x3 - 6 m", "100x100x3 - 6 m", "40x20x3 - 6 m", "60x40x3 - 6 m"
+    };
+    if (i >= 2 && i <= 17) {
+      String gap = i <= 6 ? "  " : "";
+      return String.valueOf(rectangularTubeLabel) + gap + tubeNames[i - 2];
+    }
+    if (i == 22) {
+      return String.valueOf(sheet2mmName);
+    }
+    int optIndex = 0;
+    switch (i) {
+      case 18: optIndex = 71; break;
+      case 19: optIndex = 73; break;
+      case 20: optIndex = 72; break;
+      case 21: optIndex = 74; break;
+      case 23: optIndex = 70; break;
+      case 24: optIndex = 68; break;
+      case 25: optIndex = 69; break;
+      case 26: optIndex = 67; break;
+      default:
+        if (i >= 27 && i <= 48) {
+          optIndex = 93 - i;
+        }
+        break;
+    }
+    if (optIndex <= 0) {
+      return "";
+    }
+    Object value = ListSafeGet(optValues, optIndex, "");
+    return value == null ? "" : String.valueOf(value);
+  }
