@@ -1,0 +1,146 @@
+  @SimpleFunction(description = "Safe number conversion with zero fallback.")
+  public double SafeNumber0(Object value) {
+    return SafeNumber(value, 0.0d);
+  }
+
+  @SimpleFunction(description = "Returns a list item using a 1-based index, or the supplied default when the index is invalid.")
+  public Object ListSafeGet(YailList values, double index, Object defaultValue) {
+    if (values == null) {
+      return defaultValue;
+    }
+    int i = (int) Math.round(index);
+    if (i < 1 || i > values.size()) {
+      return defaultValue;
+    }
+    return values.getObject(i - 1);
+  }
+
+  @SimpleFunction(description = "Sums numeric values in a list. Non-numeric values count as zero.")
+  public double SumNumbers(YailList values) {
+    if (values == null) {
+      return 0.0d;
+    }
+    double total = 0.0d;
+    for (int i = 0; i < values.size(); i++) {
+      total += SafeNumber(values.getObject(i), 0.0d);
+    }
+    return total;
+  }
+
+  @SimpleFunction(description = "Expands GateCraft cut records by quantity using the exact GateCraft instance-record layout.")
+  public YailList CutExpandGateRecords(YailList validList) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (validList == null) {
+      return YailList.makeList(out);
+    }
+    for (int r = 0; r < validList.size(); r++) {
+      Object raw = validList.getObject(r);
+      if (!(raw instanceof YailList)) {
+        continue;
+      }
+      YailList item = (YailList) raw;
+      if (item.size() < 11) {
+        continue;
+      }
+      String recordId = String.valueOf(item.getObject(0));
+      int db = (int) Math.round(SafeNumber(item.getObject(7), 0.0d));
+      if (db < 1) {
+        continue;
+      }
+      for (int n = 1; n <= db; n++) {
+        java.util.ArrayList<Object> row = new java.util.ArrayList<Object>();
+        row.add(recordId + "_" + n);
+        row.add(item.getObject(1));
+        row.add(item.getObject(2));
+        row.add(item.getObject(3));
+        row.add(item.getObject(4));
+        row.add(item.getObject(5));
+        row.add(item.getObject(6));
+        row.add(item.getObject(10));
+        row.add(item.getObject(9));
+        row.add(item.getObject(8));
+        out.add(YailList.makeList(row));
+      }
+    }
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "GateCraft fixed stock-material mapping. Returns [code, typeIndex, unitIndex] for selection index 1..48.")
+  public YailList FixedMaterialData(double selectionIndex) {
+    final String[] codes = new String[] {
+      "",
+      "ZS_20X20X2_6M",
+      "ZS_30x30x2_6M",
+      "ZS_40x40x2_6M",
+      "ZS_60x60x2_6M",
+      "ZS_80x80x2_6M",
+      "ZS_100x100x2_6M",
+      "ZS_40x20x2_6M",
+      "ZS_60x40x2_6M",
+      "ZS_20X20X3_6M",
+      "ZS_30x30x3_6M",
+      "ZS_40x40x3_6M",
+      "ZS_60x60x3_6M",
+      "ZS_80x80x3_6M",
+      "ZS_100x100x3_6M",
+      "ZS_40x20x3_6M",
+      "ZS_60x40x3_6M",
+      "C_SIN_6M",
+      "U_PROFIL_6M",
+      "TRAPEZ_M2",
+      "LEMEZ_1MM_M2",
+      "LEMEZ_2MM_M2",
+      "LEMEZ_3MM_M3",
+      "BETON_M3",
+      "AGYAZO_M3",
+      "ZUZOTTKO_M3",
+      "TERKO_STD_DB",
+      "SZEGELY_DB",
+      "ZSALUKO_15",
+      "ZSALUKO_20",
+      "ZSALUKO_25",
+      "ZSALUKO_30",
+      "KERITESLEC_DB",
+      "CSAVAR_ONFURO_01",
+      "CSAVAR_LEMEZ_01",
+      "CSAVAR_FA_01",
+      "CSAVAR_BETON_01",
+      "ZSANER_01",
+      "ZARSZERKEZET-01",
+      "ZARFOGADO_01",
+      "PIHENTETO_01",
+      "GORGOSOR_01",
+      "FELFUTOGORGO_01",
+      "TAMASZTOGORGO_01",
+      "ALSOFOGADO_01",
+      "FELSOFOGADO_01",
+      "FUTOGORGO_01",
+      "FESTEK_M2"
+    };
+    int i = (int) Math.round(selectionIndex);
+    if (i < 1 || i > codes.length) {
+      return list("", 8, 1);
+    }
+    int typeIndex;
+    int unitIndex;
+    if (i <= 19) {
+      typeIndex = 1; unitIndex = 2;
+    } else if (i <= 23) {
+      typeIndex = 4; unitIndex = 3;
+    } else if (i == 24) {
+      typeIndex = 2; unitIndex = 4;
+    } else if (i <= 26) {
+      typeIndex = 3; unitIndex = 4;
+    } else if (i <= 28) {
+      typeIndex = 3; unitIndex = 1;
+    } else if (i <= 32) {
+      typeIndex = 2; unitIndex = 1;
+    } else if (i == 33) {
+      typeIndex = 4; unitIndex = 1;
+    } else if (i <= 47) {
+      typeIndex = 6; unitIndex = 1;
+    } else {
+      typeIndex = 7; unitIndex = 3;
+    }
+    return list(codes[i - 1], typeIndex, unitIndex);
+  }
