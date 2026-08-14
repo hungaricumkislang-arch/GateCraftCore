@@ -1,0 +1,78 @@
+  // ------------------------------------------------------------------
+  // GateCraft MotorDiag full six-language list/display helpers (v2.5)
+  // ------------------------------------------------------------------
+
+  private YailList mdLocalizedList(Object record, String baseKey, int languageIndex) {
+    if (record == null || baseKey == null) return YailList.makeEmptyList();
+    int lang = languageIndex < 1 || languageIndex > 6 ? 1 : languageIndex;
+    String suffix = mdLangSuffix(lang);
+    Object v = mdGet(record, baseKey + suffix, null);
+    java.util.ArrayList<Object> values = mdList(v);
+    if (!values.isEmpty() || v instanceof YailList || v instanceof java.util.List) {
+      return YailList.makeList(values);
+    }
+    v = mdGet(record, baseKey, null);
+    values = mdList(v);
+    if (!values.isEmpty() || v instanceof YailList || v instanceof java.util.List) {
+      return YailList.makeList(values);
+    }
+    if (lang != 2) {
+      v = mdGet(record, baseKey + "_en", null);
+      values = mdList(v);
+      if (!values.isEmpty() || v instanceof YailList || v instanceof java.util.List) {
+        return YailList.makeList(values);
+      }
+    }
+    v = mdGet(record, baseKey + "_hu", null);
+    return YailList.makeList(mdList(v));
+  }
+
+  @SimpleFunction(description = "Returns one MotorDiag list field in HU/EN/DE/ES/FR/ZH with base/English/Hungarian fallback. A fresh list is returned on every call.")
+  public YailList MotorDiagGetLocalizedList(Object record, String baseKey, double languageIndex) {
+    return mdLocalizedList(record, baseKey, (int) Math.round(languageIndex));
+  }
+
+  @SimpleFunction(description = "Builds fully localized MotorDiag ListView strings for FAULT/LED/DIP/PARAMETER/TERMINAL/MANUAL/CONTROLLER/BRAND modes.")
+  public YailList MotorDiagBuildDisplayLocalized(YailList records, String mode, double languageIndex) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (records == null) return YailList.makeList(out);
+    String m = mdNorm(mode);
+    int lang = (int) Math.round(languageIndex);
+    if (lang < 1 || lang > 6) lang = 1;
+    for (int i = 0; i < records.size(); i++) {
+      Object r = records.getObject(i);
+      String left;
+      String right;
+      if ("FAULT".equals(m)) {
+        left = mdString(mdGet(r,"code",""));
+        right = mdLocalized(r,"title",lang);
+      } else if ("LED".equals(m)) {
+        left = mdLocalized(r,"pattern_text",lang);
+        if (left.length() == 0) left = mdString(mdGet(r,"flash_count",""));
+        right = mdLocalized(r,"title",lang);
+      } else if ("DIP".equals(m)) {
+        left = mdString(mdGet(r,"display_code",mdGet(r,"switch_number","")));
+        right = mdLocalized(r,"title",lang);
+      } else if ("PARAMETER".equals(m)) {
+        left = mdString(mdGet(r,"parameter_code",""));
+        right = mdLocalized(r,"title",lang);
+      } else if ("TERMINAL".equals(m)) {
+        left = mdString(mdGet(r,"terminal_numbers",""));
+        right = mdLocalized(r,"function",lang);
+      } else if ("MANUAL".equals(m)) {
+        left = mdLocalized(r,"title",lang);
+        right = mdString(mdGet(r,"revision",""));
+      } else if ("CONTROLLER".equals(m)) {
+        left = mdString(mdGet(r,"controller_name",""));
+        right = mdString(mdGet(r,"revision",""));
+      } else if ("BRAND".equals(m)) {
+        left = mdString(mdGet(r,"brand_name",""));
+        right = mdString(mdGet(r,"country",""));
+      } else {
+        left = mdString(mdGet(r,"id",""));
+        right = mdLocalized(r,"title",lang);
+      }
+      if (right.length() > 0) out.add(left + " | " + right); else out.add(left);
+    }
+    return YailList.makeList(out);
+  }
