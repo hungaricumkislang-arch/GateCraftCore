@@ -1,0 +1,127 @@
+  private java.lang.reflect.Method gcFindSetter(Object component, String property) {
+    if (component == null || property == null || property.length() == 0) return null;
+    java.lang.reflect.Method[] methods = component.getClass().getMethods();
+    for (java.lang.reflect.Method method : methods) {
+      if (property.equals(method.getName()) && method.getParameterTypes().length == 1) return method;
+    }
+    return null;
+  }
+
+  private Object gcCoerce(Object value, Class<?> target) {
+    if (target == String.class) return value == null ? "" : String.valueOf(value);
+    if (target == boolean.class || target == Boolean.class) {
+      if (value instanceof Boolean) return value;
+      if (value instanceof Number) return ((Number) value).doubleValue() != 0.0d;
+      String s = value == null ? "" : String.valueOf(value).trim();
+      return "true".equalsIgnoreCase(s) || "1".equals(s);
+    }
+    if (target == int.class || target == Integer.class) return (int) Math.round(SafeNumber(value, 0.0d));
+    if (target == long.class || target == Long.class) return (long) Math.round(SafeNumber(value, 0.0d));
+    if (target == float.class || target == Float.class) return (float) SafeNumber(value, 0.0d);
+    if (target == double.class || target == Double.class) return SafeNumber(value, 0.0d);
+    if (value == null || target.isInstance(value)) return value;
+    return value;
+  }
+
+  private boolean gcSetProperty(Object component, String property, Object value) {
+    try {
+      java.lang.reflect.Method setter = gcFindSetter(component, property);
+      if (setter == null) return false;
+      Object coerced = gcCoerce(value, setter.getParameterTypes()[0]);
+      setter.invoke(component, coerced);
+      return true;
+    } catch (Throwable ignored) {
+      return false;
+    }
+  }
+
+  private java.util.ArrayList<Integer> gcParseIndexSpec(String spec) {
+    java.util.ArrayList<Integer> out = new java.util.ArrayList<Integer>();
+    if (spec == null) return out;
+    String[] parts = spec.trim().split("\\|");
+    for (String raw : parts) {
+      String token = raw == null ? "" : raw.trim();
+      if (token.length() == 0) continue;
+      int dash = token.indexOf('-');
+      try {
+        if (dash > 0 && dash < token.length() - 1) {
+          int a = Integer.parseInt(token.substring(0, dash).trim());
+          int b = Integer.parseInt(token.substring(dash + 1).trim());
+          if (a <= b) {
+            for (int i = a; i <= b; i++) out.add(i);
+          } else {
+            for (int i = a; i >= b; i--) out.add(i);
+          }
+        } else {
+          out.add(Integer.parseInt(token));
+        }
+      } catch (NumberFormatException ignored) {
+        out.add(0);
+      }
+    }
+    return out;
+  }
+
+  @SimpleFunction(description = "Safely returns the Nth value selected by a pipe/range index specification. Indexes in the specification and position are 1-based.")
+  public Object IndexSpecGet(YailList values, String indexSpec, double position) {
+    if (values == null) return "";
+    java.util.ArrayList<Integer> indices = gcParseIndexSpec(indexSpec);
+    int pos = (int) Math.round(position);
+    if (pos < 1 || pos > indices.size()) return "";
+    int sourceIndex = indices.get(pos - 1);
+    if (sourceIndex < 1 || sourceIndex > values.size()) return "";
+    return values.getObject(sourceIndex - 1);
+  }
+
+  @SimpleFunction(description = "Sets the same public App Inventor property on each supplied component. Returns the number of successful setters.")
+  public double BatchSetProperty(YailList components, String property, Object value) {
+    if (components == null) return 0.0d;
+    int ok = 0;
+    for (int i = 0; i < components.size(); i++) {
+      if (gcSetProperty(components.getObject(i), property, value)) ok++;
+    }
+    return ok;
+  }
+
+  @SimpleFunction(description = "Sets one public App Inventor property on each supplied component using values selected from a source list by a pipe/range index specification. Returns successful setter count.")
+  public double BatchSetPropertyByIndexSpec(YailList components, String property,
+      YailList sourceValues, String indexSpec) {
+    if (components == null || sourceValues == null) return 0.0d;
+    java.util.ArrayList<Integer> indices = gcParseIndexSpec(indexSpec);
+    int count = Math.min(components.size(), indices.size());
+    int ok = 0;
+    for (int i = 0; i < count; i++) {
+      int sourceIndex = indices.get(i);
+      if (sourceIndex < 1 || sourceIndex > sourceValues.size()) continue;
+      Object value = sourceValues.getObject(sourceIndex - 1);
+      if (gcSetProperty(components.getObject(i), property, value)) ok++;
+    }
+    return ok;
+  }
+
+  @SimpleFunction(description = "Sets two public App Inventor properties on every supplied component. Returns total successful setter calls.")
+  public double BatchSetTwoProperties(YailList components, String property1, Object value1,
+      String property2, Object value2) {
+    if (components == null) return 0.0d;
+    int ok = 0;
+    for (int i = 0; i < components.size(); i++) {
+      Object component = components.getObject(i);
+      if (gcSetProperty(component, property1, value1)) ok++;
+      if (gcSetProperty(component, property2, value2)) ok++;
+    }
+    return ok;
+  }
+
+  @SimpleFunction(description = "Sets three public App Inventor properties on every supplied component. Returns total successful setter calls.")
+  public double BatchSetThreeProperties(YailList components, String property1, Object value1,
+      String property2, Object value2, String property3, Object value3) {
+    if (components == null) return 0.0d;
+    int ok = 0;
+    for (int i = 0; i < components.size(); i++) {
+      Object component = components.getObject(i);
+      if (gcSetProperty(component, property1, value1)) ok++;
+      if (gcSetProperty(component, property2, value2)) ok++;
+      if (gcSetProperty(component, property3, value3)) ok++;
+    }
+    return ok;
+  }
