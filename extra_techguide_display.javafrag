@@ -1,0 +1,58 @@
+  // ------------------------------------------------------------------
+  // GateCraft Technical Guide display/category helpers (v2.7)
+  // ------------------------------------------------------------------
+
+  @SimpleFunction(description="Filters Technical Guide metadata for one category/subcategory and returns compact result records.")
+  public YailList TechGuideCategoryResults(YailList articles, YailList workflows, String categoryId, String subcategoryId,
+      String level, Object query, double languageIndex) {
+    int lang=tgLang(languageIndex); String cat=tgAsciiNorm(categoryId), sub=tgAsciiNorm(subcategoryId);
+    java.util.ArrayList<String> toks=tgTokens(query); java.util.ArrayList<YailList> found=new java.util.ArrayList<YailList>();
+    if(articles!=null) for(int i=0;i<articles.size();i++) { Object r=articles.getObject(i);
+      if(cat.length()>0 && !cat.equals(tgAsciiNorm(mdGet(r,"category_id","")))) continue;
+      if(sub.length()>0 && !"ALL".equals(sub) && !sub.equals(tgAsciiNorm(mdGet(r,"subcategory_id","")))) continue;
+      if(!tgLevelMatches(r,level)) continue; int sc=tgScore(r,toks,lang); if(sc>0) found.add(tgResult("ARTICLE",r,sc,lang)); }
+    if(workflows!=null) for(int i=0;i<workflows.size();i++) { Object r=workflows.getObject(i);
+      if(cat.length()>0 && !cat.equals(tgAsciiNorm(mdGet(r,"category_id","")))) continue;
+      if(!tgLevelMatches(r,level)) continue; int sc=tgScore(r,toks,lang); if(sc>0) found.add(tgResult("WORKFLOW",r,sc,lang)); }
+    java.util.Collections.sort(found,new java.util.Comparator<YailList>(){public int compare(YailList a,YailList b){return mdString(a.getObject(2)).compareToIgnoreCase(mdString(b.getObject(2)));}});
+    java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();out.addAll(found);return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Returns child Technical Guide categories for a parent category, preserving source order.")
+  public YailList TechGuideChildCategories(YailList categories, String parentId) {
+    java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); String p=tgAsciiNorm(parentId);
+    if(categories!=null) for(int i=0;i<categories.size();i++){Object r=categories.getObject(i); if(p.equals(tgAsciiNorm(mdGet(r,"parent_id","")))) out.add(r);} return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Build localized Technical Guide category titles.")
+  public YailList TechGuideCategoryDisplay(YailList categories, double languageIndex) {
+    java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); int lang=tgLang(languageIndex);
+    if(categories!=null) for(int i=0;i<categories.size();i++) out.add(tgText(categories.getObject(i),"title",lang)); return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Build localized article step list display.")
+  public YailList TechGuideStepDisplay(Object article, double languageIndex) {
+    int lang=tgLang(languageIndex); java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();
+    for(Object st:mdList(mdGet(article,"steps",YailList.makeEmptyList()))) {
+      String no=mdString(mdGet(st,"step_no","")); String t=tgText(st,"title",lang); String x=tgText(st,"text",lang);
+      out.add((no.length()>0?no+". ":"")+t+(x.length()>0?" — "+x:""));
+    } return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Build localized workflow phase list display.")
+  public YailList TechGuidePhaseDisplay(Object workflow, double languageIndex) {
+    int lang=tgLang(languageIndex); java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();
+    for(Object ph:mdList(mdGet(workflow,"phases",YailList.makeEmptyList()))) {
+      String no=mdString(mdGet(ph,"phase_no","")); String t=tgText(ph,"title",lang); out.add((no.length()>0?no+". ":"")+t);
+    } return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Build localized Technical Guide favorite/history display from compact reference records and metadata.")
+  public YailList TechGuideReferenceDisplay(YailList refs, YailList articleMeta, YailList workflowMeta, double languageIndex) {
+    int lang=tgLang(languageIndex); java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();
+    if(refs!=null) for(int i=0;i<refs.size();i++) {
+      Object ref=refs.getObject(i); String type=tgAsciiNorm(mdGet(ref,"content_type","ARTICLE")); String id=mdString(mdGet(ref,"content_id","")); Object rec;
+      if("WORKFLOW".equals(type)) rec=MotorDiagFindById(workflowMeta,"workflow_id",id); else rec=MotorDiagFindById(articleMeta,"article_id",id);
+      String title=tgText(rec,"title",lang); if(title.length()==0) title=id; out.add(title+("WORKFLOW".equals(type)?" [Workflow]":""));
+    } return YailList.makeList(out);
+  }
