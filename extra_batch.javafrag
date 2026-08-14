@@ -73,55 +73,47 @@
     return values.getObject(sourceIndex - 1);
   }
 
-  @SimpleFunction(description = "Sets the same public App Inventor property on each supplied component. Returns the number of successful setters.")
-  public double BatchSetProperty(YailList components, String property, Object value) {
-    if (components == null) return 0.0d;
-    int ok = 0;
+  @SimpleFunction(description = "Sets the same public App Inventor property on each supplied component.")
+  public void BatchSetProperty(YailList components, String property, Object value) {
+    if (components == null) return;
     for (int i = 0; i < components.size(); i++) {
-      if (gcSetProperty(components.getObject(i), property, value)) ok++;
+      gcSetProperty(components.getObject(i), property, value);
     }
-    return ok;
   }
 
-  @SimpleFunction(description = "Sets one public App Inventor property on each supplied component using values selected from a source list by a pipe/range index specification. Returns successful setter count.")
-  public double BatchSetPropertyByIndexSpec(YailList components, String property,
+  @SimpleFunction(description = "Sets one public App Inventor property on each supplied component using values selected from a source list by a pipe/range index specification.")
+  public void BatchSetPropertyByIndexSpec(YailList components, String property,
       YailList sourceValues, String indexSpec) {
-    if (components == null || sourceValues == null) return 0.0d;
+    if (components == null || sourceValues == null) return;
     java.util.ArrayList<Integer> indices = gcParseIndexSpec(indexSpec);
     int count = Math.min(components.size(), indices.size());
-    int ok = 0;
     for (int i = 0; i < count; i++) {
       int sourceIndex = indices.get(i);
       if (sourceIndex < 1 || sourceIndex > sourceValues.size()) continue;
       Object value = sourceValues.getObject(sourceIndex - 1);
-      if (gcSetProperty(components.getObject(i), property, value)) ok++;
+      gcSetProperty(components.getObject(i), property, value);
     }
-    return ok;
   }
 
-  @SimpleFunction(description = "Sets two public App Inventor properties on every supplied component. Returns total successful setter calls.")
-  public double BatchSetTwoProperties(YailList components, String property1, Object value1,
+  @SimpleFunction(description = "Sets two public App Inventor properties on every supplied component.")
+  public void BatchSetTwoProperties(YailList components, String property1, Object value1,
       String property2, Object value2) {
-    if (components == null) return 0.0d;
-    int ok = 0;
+    if (components == null) return;
     for (int i = 0; i < components.size(); i++) {
       Object component = components.getObject(i);
-      if (gcSetProperty(component, property1, value1)) ok++;
-      if (gcSetProperty(component, property2, value2)) ok++;
+      gcSetProperty(component, property1, value1);
+      gcSetProperty(component, property2, value2);
     }
-    return ok;
   }
 
-  @SimpleFunction(description = "Sets three public App Inventor properties on every supplied component. Returns total successful setter calls.")
-  public double BatchSetThreeProperties(YailList components, String property1, Object value1,
+  @SimpleFunction(description = "Sets three public App Inventor properties on every supplied component.")
+  public void BatchSetThreeProperties(YailList components, String property1, Object value1,
       String property2, Object value2, String property3, Object value3) {
-    if (components == null) return 0.0d;
-    int ok = 0;
+    if (components == null) return;
     for (int i = 0; i < components.size(); i++) {
       Object component = components.getObject(i);
-      if (gcSetProperty(component, property1, value1)) ok++;
-      if (gcSetProperty(component, property2, value2)) ok++;
-      if (gcSetProperty(component, property3, value3)) ok++;
+      gcSetProperty(component, property1, value1);
+      gcSetProperty(component, property2, value2);
+      gcSetProperty(component, property3, value3);
     }
-    return ok;
   }
