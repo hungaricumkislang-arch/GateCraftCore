@@ -51,12 +51,15 @@
     gcStaticListCache = loaded;
   }
 
-  @SimpleFunction(description = "Returns one exact GateCraft flat static list stored in the bundled compressed gc_static.dat asset.")
+  @SimpleFunction(description = "Returns one exact GateCraft flat static list stored in the bundled compressed gc_static.dat asset. Every call returns a fresh list instance.")
   public YailList StaticList(String key) {
     gcEnsureStaticLists();
     if (gcStaticListCache == null || key == null) return YailList.makeEmptyList();
     YailList result = gcStaticListCache.get(key);
-    return result == null ? YailList.makeEmptyList() : result;
+    if (result == null) return YailList.makeEmptyList();
+    java.util.ArrayList<Object> copy = new java.util.ArrayList<Object>();
+    for (int i = 0; i < result.size(); i++) copy.add(result.getObject(i));
+    return YailList.makeList(copy);
   }
 
   @SimpleFunction(description = "Returns the number of loaded GateCraft compressed static-list records.")
