@@ -1,0 +1,157 @@
+  // ------------------------------------------------------------------
+  // GateCraft Technical Guide / Workshop Guide helpers (v2.6)
+  // Data-driven search, category filtering, finders, pack validation and user refs.
+  // ------------------------------------------------------------------
+
+  private int tgLang(double languageIndex) {
+    int lang = (int)Math.round(languageIndex);
+    return (lang < 1 || lang > 6) ? 1 : lang;
+  }
+
+  private String tgText(Object record, String baseKey, int lang) {
+    return mdLocalized(record, baseKey, lang);
+  }
+
+  private YailList tgLocalizedList(Object record, String baseKey, int lang) {
+    String suffix = mdLangSuffix(lang);
+    Object v = mdGet(record, baseKey + suffix, null);
+    if (!(v instanceof YailList) && !(v instanceof java.util.List)) v = mdGet(record, baseKey, null);
+    if (!(v instanceof YailList) && !(v instanceof java.util.List) && lang != 2) v = mdGet(record, baseKey + "_en", null);
+    if (!(v instanceof YailList) && !(v instanceof java.util.List)) v = mdGet(record, baseKey + "_hu", null);
+    return YailList.makeList(mdList(v));
+  }
+
+  private String tgAsciiNorm(Object value) {
+    String s = mdNorm(value);
+    try {
+      s = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
+    } catch (Throwable ignored) { }
+    s = s.replaceAll("[^A-Z0-9_+./#\\- ]", " ").replaceAll("\\s+", " ").trim();
+    return s;
+  }
+
+  private java.util.ArrayList<String> tgTokens(Object query) {
+    String q = tgAsciiNorm(query);
+    java.util.ArrayList<String> out = new java.util.ArrayList<String>();
+    if (q.length() == 0) return out;
+    for (String p : q.split(" ")) if (p.length() > 0) out.add(p);
+    return out;
+  }
+
+  private int tgScore(Object rec, java.util.ArrayList<String> tokens, int lang) {
+    if (tokens.isEmpty()) return 1;
+    String title = tgAsciiNorm(tgText(rec,"title",lang));
+    String shortText = tgAsciiNorm(tgText(rec,"short",lang));
+    if (shortText.length()==0) shortText=tgAsciiNorm(tgText(rec,"short_summary",lang));
+    String keywords=tgAsciiNorm(mdGet(rec,"keyword_tokens",""));
+    String aliases=tgAsciiNorm(mdGet(rec,"alias_tokens",""));
+    String category=tgAsciiNorm(mdGet(rec,"category_id",""))+" "+tgAsciiNorm(mdGet(rec,"subcategory_id",""));
+    int score=0;
+    for (String t : tokens) {
+      boolean matched=false;
+      if (title.equals(t) || (" "+title+" ").contains(" "+t+" ")) { score+=5; matched=true; }
+      else if (title.contains(t)) { score+=4; matched=true; }
+      if ((" "+keywords+" ").contains(" "+t+" ")) { score+=3; matched=true; }
+      else if (keywords.contains(t)) { score+=2; matched=true; }
+      if (aliases.contains(t)) { score+=2; matched=true; }
+      if (shortText.contains(t)) { score+=1; matched=true; }
+      if (category.contains(t)) { score+=1; matched=true; }
+      if (!matched) return 0;
+    }
+    return score;
+  }
+
+  private boolean tgListContainsNorm(Object value, String wanted) {
+    String w=tgAsciiNorm(wanted);
+    if (w.length()==0 || "ALL".equals(w) || "MINDEN".equals(w)) return true;
+    for (Object x : mdList(value)) if (tgAsciiNorm(x).equals(w)) return true;
+    String s=tgAsciiNorm(value);
+    return s.equals(w) || (" "+s+" ").contains(" "+w+" ");
+  }
+
+  private boolean tgLevelMatches(Object rec, String level) {
+    String l=tgAsciiNorm(level);
+    if (l.length()==0 || "ALL".equals(l) || "AUTO".equals(l) || "MINDEN".equals(l)) return true;
+    String min=tgAsciiNorm(mdGet(rec,"level_min","BEGINNER"));
+    String max=tgAsciiNorm(mdGet(rec,"level_max",min));
+    int want=tgLevelRank(l), lo=tgLevelRank(min), hi=tgLevelRank(max);
+    return want>=lo && want<=hi;
+  }
+
+  private int tgLevelRank(String l) {
+    if (l.contains("BEGIN") || l.contains("KEZD")) return 1;
+    if (l.contains("INTER") || l.contains("KOZEP")) return 2;
+    if (l.contains("ADV") || l.contains("HALAD")) return 3;
+    return 2;
+  }
+
+  private boolean tgVerified(Object rec) {
+    String s=tgAsciiNorm(mdGet(rec,"status",""));
+    return "VERIFIED".equals(s) || "REVIEWED".equals(s);
+  }
+
+  private boolean tgOffline(Object rec) {
+    Object v=mdGet(rec,"offline",true);
+    if (v instanceof Boolean) return ((Boolean)v).booleanValue();
+    String s=tgAsciiNorm(v);
+    return !("FALSE".equals(s) || "0".equals(s) || "NO".equals(s));
+  }
+
+  private YailList tgResult(String type, Object rec, int score, int lang) {
+    String id="ARTICLE".equals(type)?mdString(mdGet(rec,"article_id","")):mdString(mdGet(rec,"workflow_id",""));
+    String title=tgText(rec,"title",lang);
+    String shortText=tgText(rec,"short",lang);
+    if (shortText.length()==0) shortText=tgText(rec,"short_summary",lang);
+    String pack=mdString(mdGet(rec,"pack_id","CORE"));
+    return list(type,id,title,shortText,(double)score,pack,mdString(mdGet(rec,"category_id","")),mdString(mdGet(rec,"article_type","")));
+  }
+
+  @SimpleFunction(description="Technical Guide localized scalar field with HU/EN/DE/ES/FR/ZH fallback.")
+  public String TechGuideText(Object record, String baseKey, double languageIndex) { return tgText(record,baseKey,tgLang(languageIndex)); }
+
+  @SimpleFunction(description="Technical Guide localized list field with HU/EN/DE/ES/FR/ZH fallback.")
+  public YailList TechGuideList(Object record, String baseKey, double languageIndex) { return tgLocalizedList(record,baseKey,tgLang(languageIndex)); }
+
+  @SimpleFunction(description="Technical Guide dictionary field getter.")
+  public Object TechGuideGet(Object record, String key, Object fallback) { return mdGet(record,key,fallback); }
+
+  @SimpleFunction(description="Technical Guide FindById for dictionary record lists.")
+  public Object TechGuideFindById(YailList records, String key, Object id) { return MotorDiagFindById(records,key,id); }
+
+  @SimpleFunction(description="Technical Guide normalized text for search. Accents and punctuation are normalized.")
+  public String TechGuideNormalize(Object value) { return tgAsciiNorm(value); }
+
+  @SimpleFunction(description="Technical Guide ranked search over article and workflow metadata. Returns compact result records.")
+  public YailList TechGuideSearch(YailList articles, YailList workflows, Object query, String contentType, String trade, String level, boolean onlyVerified, boolean offlineOnly, double languageIndex) {
+    int lang=tgLang(languageIndex); java.util.ArrayList<String> toks=tgTokens(query); java.util.ArrayList<YailList> found=new java.util.ArrayList<YailList>(); String ct=tgAsciiNorm(contentType);
+    if (articles!=null) for(int i=0;i<articles.size();i++) { Object r=articles.getObject(i); String at=tgAsciiNorm(mdGet(r,"article_type","KNOWLEDGE")); if (ct.length()>0 && !"ALL".equals(ct) && !"MINDEN".equals(ct) && !ct.equals(at)) continue; if (!tgListContainsNorm(mdGet(r,"trade_codes",YailList.makeEmptyList()),trade)) continue; if (!tgLevelMatches(r,level)) continue; if (onlyVerified && !tgVerified(r)) continue; if (offlineOnly && !tgOffline(r)) continue; int score=tgScore(r,toks,lang); if(score>0) found.add(tgResult("ARTICLE",r,score,lang)); }
+    if ((ct.length()==0 || "ALL".equals(ct) || "MINDEN".equals(ct) || "WORKFLOW".equals(ct)) && workflows!=null) for(int i=0;i<workflows.size();i++) { Object r=workflows.getObject(i); if (!tgListContainsNorm(mdGet(r,"trade_codes",YailList.makeEmptyList()),trade)) continue; if (!tgLevelMatches(r,level)) continue; if (onlyVerified && !tgVerified(r)) continue; if (offlineOnly && !tgOffline(r)) continue; int score=tgScore(r,toks,lang); if(score>0) found.add(tgResult("WORKFLOW",r,score,lang)); }
+    java.util.Collections.sort(found,new java.util.Comparator<YailList>() { public int compare(YailList a,YailList b) { return Double.compare(SafeNumber(b.getObject(4),0),SafeNumber(a.getObject(4),0)); } }); java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); out.addAll(found); return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Builds display strings for compact Technical Guide search result records.")
+  public YailList TechGuideBuildResultDisplay(YailList results) { java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); if(results!=null) for(int i=0;i<results.size();i++) { Object x=results.getObject(i); java.util.ArrayList<Object> a=mdList(x); String title=a.size()>2?mdString(a.get(2)):""; String shortText=a.size()>3?mdString(a.get(3)):""; String type=a.size()>0?mdString(a.get(0)):""; out.add(title+(shortText.length()>0?"\n"+shortText:"")+"  ["+type+"]"); } return YailList.makeList(out); }
+
+  @SimpleFunction(description="Technical Guide tool finder. Filters TOOL_MATCH rules and sorts by priority.")
+  public YailList TechGuideToolFinder(YailList rules, String taskCode, String materialCode, double size) { java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); String task=tgAsciiNorm(taskCode),mat=tgAsciiNorm(materialCode); if(rules!=null) for(int i=0;i<rules.size();i++){Object r=rules.getObject(i); if(!task.equals(tgAsciiNorm(mdGet(r,"task_code","")))) continue; String rm=tgAsciiNorm(mdGet(r,"material_code","ALL")); if(!"ALL".equals(rm)&&!mat.equals(rm)) continue; double lo=SafeNumber(mdGet(r,"min_thickness",0),0), hi=SafeNumber(mdGet(r,"max_thickness",999999),999999); if(size>0 && (size<lo||size>hi)) continue; out.add(r); } java.util.Collections.sort(out,new java.util.Comparator<Object>(){public int compare(Object a,Object b){return Double.compare(SafeNumber(mdGet(a,"priority",999),999),SafeNumber(mdGet(b,"priority",999),999));}});return YailList.makeList(out); }
+
+  @SimpleFunction(description="Technical Guide fastener finder. Returns ranked FASTENER_MATCH rules.")
+  public YailList TechGuideFastenerFinder(YailList rules, String baseMaterial, String attachedMaterial, String loadCategory, String environment, double thickness) { java.util.ArrayList<Object[]> scored=new java.util.ArrayList<Object[]>(); String b=tgAsciiNorm(baseMaterial),a=tgAsciiNorm(attachedMaterial),l=tgAsciiNorm(loadCategory),e=tgAsciiNorm(environment); if(rules!=null) for(int i=0;i<rules.size();i++){Object r=rules.getObject(i);int sc=0; String rb=tgAsciiNorm(mdGet(r,"base_material","ALL")); if(!"ALL".equals(rb)&&!rb.equals(b)) continue; else sc+=3; String ra=tgAsciiNorm(mdGet(r,"attached_material","ALL")); if(!"ALL".equals(ra)&&!ra.equals(a)) continue; else sc+=1; String rl=tgAsciiNorm(mdGet(r,"load_category","ALL")); if(!"ALL".equals(rl)&&!rl.equals(l)) continue; else sc+=2; String re=tgAsciiNorm(mdGet(r,"environment","ALL")); if(!"ALL".equals(re)&&!re.equals(e)) continue; else sc+=2; double maxT=SafeNumber(mdGet(r,"max_thickness",999999),999999); if(thickness>0&&thickness>maxT) continue; sc += Math.max(0,20-(int)SafeNumber(mdGet(r,"priority",10),10)); scored.add(new Object[]{r,Integer.valueOf(sc)}); } java.util.Collections.sort(scored,new java.util.Comparator<Object[]>(){public int compare(Object[] x,Object[] y){return ((Integer)y[1]).compareTo((Integer)x[1]);}}); java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();for(Object[] x:scored)out.add(x[0]);return YailList.makeList(out); }
+
+  @SimpleFunction(description="Technical Guide material guide. Returns MATERIAL_MATCH rules sorted by score/priority.")
+  public YailList TechGuideMaterialGuide(YailList rules, String useCode, String environment, String priorityCode) { java.util.ArrayList<Object[]> scored=new java.util.ArrayList<Object[]>();String u=tgAsciiNorm(useCode),e=tgAsciiNorm(environment),p=tgAsciiNorm(priorityCode); if(rules!=null)for(int i=0;i<rules.size();i++){Object r=rules.getObject(i);int sc=0; String ru=tgAsciiNorm(mdGet(r,"use_code","ALL"));if(!"ALL".equals(ru)&&!ru.equals(u))continue;else sc+=4; String re=tgAsciiNorm(mdGet(r,"environment_code","ALL"));if(!"ALL".equals(re)&&!re.equals(e))continue;else sc+=3; String rp=tgAsciiNorm(mdGet(r,"priority_code","ALL"));if("ALL".equals(rp)||rp.equals(p))sc+=3; sc+=(int)SafeNumber(mdGet(r,"score",0),0);sc-=Math.min(10,(int)SafeNumber(mdGet(r,"rank",0),0));scored.add(new Object[]{r,Integer.valueOf(sc)});} java.util.Collections.sort(scored,new java.util.Comparator<Object[]>(){public int compare(Object[] x,Object[] y){return ((Integer)y[1]).compareTo((Integer)x[1]);}}); java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();for(Object[] x:scored)out.add(x[0]);return YailList.makeList(out); }
+
+  @SimpleFunction(description="Build localized finder result display for TOOL/FASTENER/MATERIAL rule lists.")
+  public YailList TechGuideRuleDisplay(YailList rules, String kind, double languageIndex) { int lang=tgLang(languageIndex);String k=tgAsciiNorm(kind);java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); if(rules!=null)for(int i=0;i<rules.size();i++){Object r=rules.getObject(i);String id=""; if("TOOL".equals(k)) id=mdString(mdGet(r,"tool_article_id",""))+" / "+mdString(mdGet(r,"accessory_article_id","")); else if("FASTENER".equals(k)) id=mdString(mdGet(r,"fastener_article_id","")); else id=mdString(mdGet(r,"material_article_id","")); String why=tgText(r,"why",lang); if(why.length()==0) why=tgText(r,"pros",lang); out.add(id+(why.length()>0?" — "+why:""));} return YailList.makeList(out); }
+
+  @SimpleFunction(description="Validates a Technical Guide content pack. Returns [valid,errorCode,packId,version,articleCount,workflowCount].")
+  public YailList TechGuideValidatePack(Object packObject, String expectedPackId) { java.util.Map<Object,Object> p=mdMap(packObject);if(p.isEmpty())return list(false,"INVALID_PACKAGE","","",0.0d,0.0d); String schema=mdString(mdGet(packObject,"schema_version",""));String packId=mdString(mdGet(packObject,"pack_id",""));String version=mdString(mdGet(packObject,"version","")); if(schema.length()==0)return list(false,"MISSING_SCHEMA",packId,version,0.0d,0.0d);if(packId.length()==0)return list(false,"MISSING_PACK_ID","",version,0.0d,0.0d); if(expectedPackId!=null&&expectedPackId.trim().length()>0&&!tgAsciiNorm(expectedPackId).equals(tgAsciiNorm(packId)))return list(false,"PACK_ID_MISMATCH",packId,version,0.0d,0.0d); Object ao=mdGet(packObject,"articles",null),wo=mdGet(packObject,"workflows",null);if(!(ao instanceof YailList)&&!(ao instanceof java.util.List))return list(false,"MISSING_ARTICLES",packId,version,0.0d,0.0d); if(!(wo instanceof YailList)&&!(wo instanceof java.util.List))return list(false,"MISSING_WORKFLOWS",packId,version,0.0d,0.0d); java.util.HashSet<String> ids=new java.util.HashSet<String>();for(Object a:mdList(ao)){String id=mdString(mdGet(a,"article_id",""));if(id.length()==0)return list(false,"ARTICLE_ID_MISSING",packId,version,0.0d,0.0d);if(!ids.add("A:"+id))return list(false,"DUPLICATE_ARTICLE_ID",packId,version,0.0d,0.0d);} for(Object w:mdList(wo)){String id=mdString(mdGet(w,"workflow_id",""));if(id.length()==0)return list(false,"WORKFLOW_ID_MISSING",packId,version,0.0d,0.0d);if(!ids.add("W:"+id))return list(false,"DUPLICATE_WORKFLOW_ID",packId,version,0.0d,0.0d);} return list(true,"OK",packId,version,(double)mdList(ao).size(),(double)mdList(wo).size()); }
+
+  @SimpleFunction(description="Toggle Technical Guide favorite reference [content_type,content_id,saved_at].")
+  public YailList TechGuideToggleFavorite(YailList refs, String contentType, String contentId) { java.util.ArrayList<Object> out=mdList(refs);String t=tgAsciiNorm(contentType),id=tgAsciiNorm(contentId);int found=-1; for(int i=0;i<out.size();i++){Object r=out.get(i);if(t.equals(tgAsciiNorm(mdGet(r,"content_type","")))&&id.equals(tgAsciiNorm(mdGet(r,"content_id","")))){found=i;break;}} if(found>=0)out.remove(found);else{java.util.LinkedHashMap<Object,Object> m=new java.util.LinkedHashMap<Object,Object>();m.put("content_type",contentType);m.put("content_id",contentId);m.put("saved_at",String.valueOf(System.currentTimeMillis()));out.add(0,m);}return YailList.makeList(out); }
+
+  @SimpleFunction(description="Append Technical Guide history reference, de-duplicate immediate repeat and enforce limit.")
+  public YailList TechGuideAppendHistory(YailList history, String contentType, String contentId, double maximumItems) { java.util.ArrayList<Object> out=mdList(history);String t=tgAsciiNorm(contentType),id=tgAsciiNorm(contentId); if(!out.isEmpty()){Object first=out.get(0);if(t.equals(tgAsciiNorm(mdGet(first,"content_type","")))&&id.equals(tgAsciiNorm(mdGet(first,"content_id",""))))return YailList.makeList(out);} java.util.LinkedHashMap<Object,Object> m=new java.util.LinkedHashMap<Object,Object>();m.put("content_type",contentType);m.put("content_id",contentId);m.put("opened_at",String.valueOf(System.currentTimeMillis()));out.add(0,m); int lim=(int)Math.max(1,Math.round(maximumItems));while(out.size()>lim)out.remove(out.size()-1);return YailList.makeList(out); }
+
+  @SimpleFunction(description="Return first N Technical Guide references.")
+  public YailList TechGuideTake(YailList values, double maximumItems) { java.util.ArrayList<Object> a=mdList(values),out=new java.util.ArrayList<Object>();int n=(int)Math.max(0,Math.round(maximumItems));for(int i=0;i<a.size()&&i<n;i++)out.add(a.get(i));return YailList.makeList(out); }
