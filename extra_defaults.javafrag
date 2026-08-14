@@ -1,0 +1,58 @@
+  private com.google.appinventor.components.runtime.util.YailDictionary electroChecklistItem(
+      String id, String group, String textKey, String unit, boolean required, boolean critical) {
+    return com.google.appinventor.components.runtime.util.YailDictionary.makeDictionary(
+        "id", id,
+        "group", group,
+        "text_key", textKey,
+        "status", "NOT_CHECKED",
+        "value", null,
+        "unit", unit,
+        "required", required,
+        "critical", critical,
+        "note", null);
+  }
+
+  @SimpleFunction(description = "Returns the exact 12-record default ElectroPro commissioning checklist.")
+  public YailList ElectroDefaultChecklist() {
+    java.util.ArrayList<Object> items = new java.util.ArrayList<Object>();
+    items.add(electroChecklistItem("CHK_1", "Projekt", "Projektadatok és tápellátás ellenőrizve", null, true, true));
+    items.add(electroChecklistItem("CHK_2", "Betáp", "Betáp feszültség és védelem ellenőrizve", "V", true, true));
+    items.add(electroChecklistItem("CHK_3", "Kábelezés", "Kábelméretezések és feszültségesések ellenőrizve", "%", true, true));
+    items.add(electroChecklistItem("CHK_4", "Szekrény", "Kapcsolószekrény és tápegység méretezése ellenőrizve", null, true, false));
+    items.add(electroChecklistItem("CHK_5", "Automatizálás", "Biztonsági és vezérlő eszközök bekötése ellenőrizve", null, true, true));
+    items.add(electroChecklistItem("CHK_6", "Biztonság", "Vészleállító / biztonsági áramkör funkciópróba", null, true, true));
+    items.add(electroChecklistItem("CHK_7", "Funkciópróba", "Teljes működési ciklus tesztelve", null, true, true));
+    items.add(electroChecklistItem("CHK_8", "Mérések", "Védővezető folytonosság / érintésvédelem mérése", null, true, true));
+    items.add(electroChecklistItem("CHK_9", "Mérések", "Szigetelési / szükséges helyi mérések dokumentálva", null, true, true));
+    items.add(electroChecklistItem("CHK_10", "Dokumentáció", "Kapcsolási és kábel dokumentáció frissítve", null, true, false));
+    items.add(electroChecklistItem("CHK_11", "Átadás", "Felhasználói tájékoztatás és átadás megtörtént", null, true, false));
+    items.add(electroChecklistItem("CHK_12", "Átadás", "Maradék hibák és megjegyzések rögzítve", null, false, false));
+    return YailList.makeList(items);
+  }
+
+  @SimpleFunction(description = "Exact current GateCraft cantilever-gate post/foundation recommendation. Returns receiverPost, receiverFoundation, supportPost, gateFoundation.")
+  public YailList CantileverPostRecommendationExact(double widthMm, double weightKg, double heightMm) {
+    String receiverPost;
+    String receiverFoundation;
+    String supportPost;
+    String gateFoundation;
+    if (widthMm <= 3000.0d && weightKg <= 200.0d) {
+      receiverPost="60x60"; receiverFoundation="600X600X800"; supportPost="80x80"; gateFoundation="1500x400x800";
+    } else if (widthMm <= 4000.0d && weightKg <= 250.0d) {
+      receiverPost="80x80"; receiverFoundation="700x700x800"; supportPost="100x100"; gateFoundation="2000x500x800";
+    } else if (widthMm <= 5000.0d && weightKg <= 300.0d) {
+      receiverPost="100x100"; receiverFoundation="700x700x800"; supportPost="120x120"; gateFoundation="2500x600x800";
+    } else {
+      receiverPost="100x100"; receiverFoundation="800X800X1400"; supportPost="140x140"; gateFoundation="3000x700x800";
+    }
+    if (heightMm > 1800.0d) {
+      if ("60x60".equals(receiverPost)) {
+        receiverPost="80x80"; receiverFoundation="700X700X800"; supportPost="100x100"; gateFoundation="2000x500x800";
+      } else if ("80x80".equals(receiverPost)) {
+        receiverPost="100x100"; receiverFoundation="700x700x800"; supportPost="120x120"; gateFoundation="2500x600x800";
+      } else if ("100x100".equals(receiverPost)) {
+        receiverPost="100x100"; receiverFoundation="800X800X1400"; supportPost="140x140"; gateFoundation="3000x700x800";
+      }
+    }
+    return list(receiverPost, receiverFoundation, supportPost, gateFoundation);
+  }
