@@ -1,0 +1,400 @@
+  // ------------------------------------------------------------------
+  // GateCraft platform layer v3.1
+  // Profile + 8 themes + 4 layout density packs + 12-language preference
+  // The legacy Blockly UI remains on its proven six-language path. For
+  // languages 7..12, legacy screens use English as a safe fallback while
+  // the user's real language preference is retained separately.
+  // ------------------------------------------------------------------
+
+  private android.content.SharedPreferences gcPlatformPrefs() {
+    return ((android.content.Context) form).getSharedPreferences("App", android.content.Context.MODE_PRIVATE);
+  }
+
+  private Object gcPlatformTinyGet(String key, Object fallback) {
+    try {
+      String raw = gcPlatformPrefs().getString(key, "");
+      if (raw == null || raw.length() == 0) return fallback;
+      return com.google.appinventor.components.runtime.util.JsonUtil.getObjectFromJson(raw, true);
+    } catch (Throwable ex) {
+      return fallback;
+    }
+  }
+
+  private void gcPlatformTinyPut(String key, Object value) {
+    try {
+      String raw = com.google.appinventor.components.runtime.util.JsonUtil.getJsonRepresentation(value);
+      gcPlatformPrefs().edit().putString(key, raw).commit();
+    } catch (Throwable ignored) { }
+  }
+
+  private Object gcPlatformGetProperty(Object component, String property, Object fallback) {
+    if (component == null || property == null) return fallback;
+    try {
+      java.lang.reflect.Method m = component.getClass().getMethod(property);
+      Object value = m.invoke(component);
+      return value == null ? fallback : value;
+    } catch (Throwable ignored) {
+      return fallback;
+    }
+  }
+
+  private String gcPlatformString(Object value, String fallback) {
+    if (value == null) return fallback == null ? "" : fallback;
+    String s = String.valueOf(value);
+    return s == null ? (fallback == null ? "" : fallback) : s;
+  }
+
+  private int gcPlatformInt(Object value, int fallback) {
+    try {
+      if (value instanceof Number) return (int) Math.round(((Number) value).doubleValue());
+      return (int) Math.round(Double.parseDouble(String.valueOf(value)));
+    } catch (Throwable ignored) {
+      return fallback;
+    }
+  }
+
+  private int gcPlatformColor(String argb) {
+    try {
+      String s = argb == null ? "FF000000" : argb.replace("#", "").trim();
+      if (s.length() == 6) s = "FF" + s;
+      return (int) Long.parseLong(s, 16);
+    } catch (Throwable ignored) {
+      return 0xFF000000;
+    }
+  }
+
+  private String gcPlatformThemeCode(int index) {
+    switch (index) {
+      case 2: return "marka1";
+      case 3: return "marka2";
+      case 4: return "marka3";
+      case 5: return "carbon";
+      case 6: return "blueprint";
+      case 7: return "forest";
+      case 8: return "hivis";
+      default: return "default";
+    }
+  }
+
+  private int gcPlatformThemeIndex(String code) {
+    String c = code == null ? "" : code.trim().toLowerCase(java.util.Locale.ROOT);
+    if ("marka1".equals(c)) return 2;
+    if ("marka2".equals(c)) return 3;
+    if ("marka3".equals(c)) return 4;
+    if ("carbon".equals(c)) return 5;
+    if ("blueprint".equals(c)) return 6;
+    if ("forest".equals(c)) return 7;
+    if ("hivis".equals(c)) return 8;
+    return 1;
+  }
+
+  @SimpleFunction(description = "Maps a 1..12 GateCraft language preference to the proven legacy six-language UI index. Languages 7..12 safely fall back to English while the real preference is retained separately.")
+  public double PlatformLegacyLanguageIndex(double languageIndex) {
+    int i = (int) Math.round(languageIndex);
+    if (i >= 1 && i <= 6) return (double) i;
+    return 2.0d;
+  }
+
+  @SimpleFunction(description = "Stores the user's 1..12 language preference and the compatible legacy language index used by existing GateCraft screens.")
+  public void PlatformSetLanguagePreference(double languageIndex) {
+    int actual = (int) Math.round(languageIndex);
+    if (actual < 1 || actual > 12) actual = 1;
+    gcPlatformTinyPut("GC_PROFILE_LANG_INDEX", actual);
+    gcPlatformTinyPut("kozos_nyelv", (int) PlatformLegacyLanguageIndex(actual));
+  }
+
+  @SimpleFunction(description = "Returns the retained 1..12 GateCraft language preference. Falls back to the current legacy language tag.")
+  public double PlatformLanguagePreference() {
+    int fallback = gcPlatformInt(gcPlatformTinyGet("kozos_nyelv", 1), 1);
+    int actual = gcPlatformInt(gcPlatformTinyGet("GC_PROFILE_LANG_INDEX", fallback), fallback);
+    if (actual < 1 || actual > 12) actual = fallback;
+    return actual;
+  }
+
+  @SimpleFunction(description = "Returns the internal theme code for GateCraft theme selector index 1..8.")
+  public String PlatformThemeCodeFromIndex(double themeIndex) {
+    return gcPlatformThemeCode((int) Math.round(themeIndex));
+  }
+
+  @SimpleFunction(description = "Returns the selector index 1..8 for an internal GateCraft theme code.")
+  public double PlatformThemeIndex(String themeCode) {
+    return (double) gcPlatformThemeIndex(themeCode);
+  }
+
+  @SimpleFunction(description = "Stores a GateCraft theme selection. Existing four theme codes are preserved; new themes are data-light runtime palettes.")
+  public void PlatformSetThemePreference(double themeIndex) {
+    String code = gcPlatformThemeCode((int) Math.round(themeIndex));
+    gcPlatformTinyPut("kozos_tema", code);
+    PlatformApplyThemeCode(code);
+  }
+
+  private boolean gcPlatformIsNewTheme(String code) {
+    String c = code == null ? "" : code.trim().toLowerCase(java.util.Locale.ROOT);
+    return "carbon".equals(c) || "blueprint".equals(c) || "forest".equals(c) || "hivis".equals(c);
+  }
+
+  private int[] gcPlatformPalette(String code) {
+    String c = code == null ? "carbon" : code.trim().toLowerCase(java.util.Locale.ROOT);
+    if ("blueprint".equals(c)) {
+      return new int[]{gcPlatformColor("FF0B1F33"), gcPlatformColor("FF12395B"), gcPlatformColor("FF39A0ED"), gcPlatformColor("FFF4F8FC"), gcPlatformColor("FF07111C"), gcPlatformColor("FF163F63")};
+    }
+    if ("forest".equals(c)) {
+      return new int[]{gcPlatformColor("FF14261C"), gcPlatformColor("FF234334"), gcPlatformColor("FF8BC34A"), gcPlatformColor("FFF4F3EA"), gcPlatformColor("FF102012"), gcPlatformColor("FF2A4B39")};
+    }
+    if ("hivis".equals(c)) {
+      return new int[]{gcPlatformColor("FF101010"), gcPlatformColor("FF242424"), gcPlatformColor("FFFFC107"), gcPlatformColor("FFFFFFFF"), gcPlatformColor("FF101010"), gcPlatformColor("FF303030")};
+    }
+    return new int[]{gcPlatformColor("FF171A1F"), gcPlatformColor("FF242A31"), gcPlatformColor("FF00B8D9"), gcPlatformColor("FFF5F7FA"), gcPlatformColor("FF081114"), gcPlatformColor("FF2D343D")};
+  }
+
+  @SimpleFunction(description = "Applies one of the four new lightweight GateCraft runtime themes to the current screen. Existing Standard/Ocean/Forge/Industrial themes are left untouched.")
+  public void PlatformApplyThemeCode(String themeCode) {
+    if (!gcPlatformIsNewTheme(themeCode)) return;
+    int[] p = gcPlatformPalette(themeCode);
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    for (java.util.Map.Entry<String, Object> e : map.entrySet()) {
+      String name = e.getKey() == null ? "" : e.getKey().toUpperCase(java.util.Locale.ROOT);
+      Object c = e.getValue();
+      if (c == null) continue;
+      if (c instanceof com.google.appinventor.components.runtime.Form) {
+        gcSetProperty(c, "BackgroundImage", "");
+        gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[0]));
+      } else if (c instanceof com.google.appinventor.components.runtime.Button) {
+        gcSetProperty(c, "Image", "");
+        gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[2]));
+        gcSetProperty(c, "TextColor", Integer.valueOf(p[4]));
+      } else if (c instanceof com.google.appinventor.components.runtime.TextBox) {
+        gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[5]));
+        gcSetProperty(c, "TextColor", Integer.valueOf(p[3]));
+        gcSetProperty(c, "HintColor", Integer.valueOf(p[3]));
+      } else if (c instanceof com.google.appinventor.components.runtime.Label) {
+        gcSetProperty(c, "TextColor", Integer.valueOf(p[3]));
+      } else if (c instanceof com.google.appinventor.components.runtime.Spinner
+          || c instanceof com.google.appinventor.components.runtime.ListPicker
+          || c instanceof com.google.appinventor.components.runtime.ListView) {
+        gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[1]));
+        gcSetProperty(c, "TextColor", Integer.valueOf(p[3]));
+      } else if (c instanceof com.google.appinventor.components.runtime.CheckBox
+          || c instanceof com.google.appinventor.components.runtime.Switch) {
+        gcSetProperty(c, "TextColor", Integer.valueOf(p[3]));
+      } else if (c instanceof com.google.appinventor.components.runtime.VerticalArrangement
+          || c instanceof com.google.appinventor.components.runtime.HorizontalArrangement
+          || c instanceof com.google.appinventor.components.runtime.VerticalScrollArrangement) {
+        int bg = (name.contains("CARD") || name.contains("HEADER") || name.contains("PANEL")) ? p[1] : p[0];
+        gcSetProperty(c, "BackgroundColor", Integer.valueOf(bg));
+      }
+    }
+  }
+
+  private String gcPlatformLayoutCode(Object value) {
+    String c = value == null ? "CLASSIC" : String.valueOf(value).trim().toUpperCase(java.util.Locale.ROOT);
+    if (c.contains("COMPACT")) return "COMPACT";
+    if (c.contains("TOUCH")) return "TOUCH";
+    if (c.contains("DENSE")) return "DENSE";
+    return "CLASSIC";
+  }
+
+  @SimpleFunction(description = "Stores the selected GateCraft layout-density pack: Classic, Compact, Touch or Dense.")
+  public void PlatformSetLayoutPreference(String layoutCode) {
+    String code = gcPlatformLayoutCode(layoutCode);
+    gcPlatformTinyPut("kozos_layout", code);
+    PlatformApplyLayoutCode(code);
+  }
+
+  @SimpleFunction(description = "Applies a lightweight pre-defined UI density/layout pack to the current screen without duplicating Designer components.")
+  public void PlatformApplyLayoutCode(String layoutCode) {
+    String code = gcPlatformLayoutCode(layoutCode);
+    if ("CLASSIC".equals(code)) return;
+    float buttonSize = "TOUCH".equals(code) ? 17.0f : ("DENSE".equals(code) ? 12.0f : 14.0f);
+    float inputSize = "TOUCH".equals(code) ? 16.0f : ("DENSE".equals(code) ? 12.0f : 14.0f);
+    float labelSize = "TOUCH".equals(code) ? 15.0f : ("DENSE".equals(code) ? 12.0f : 13.0f);
+    float titleSize = "TOUCH".equals(code) ? 21.0f : ("DENSE".equals(code) ? 16.0f : 18.0f);
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    for (java.util.Map.Entry<String, Object> e : map.entrySet()) {
+      String name = e.getKey() == null ? "" : e.getKey().toUpperCase(java.util.Locale.ROOT);
+      Object c = e.getValue();
+      if (c instanceof com.google.appinventor.components.runtime.Button) {
+        gcSetProperty(c, "FontSize", Float.valueOf(buttonSize));
+      } else if (c instanceof com.google.appinventor.components.runtime.TextBox) {
+        gcSetProperty(c, "FontSize", Float.valueOf(inputSize));
+      } else if (c instanceof com.google.appinventor.components.runtime.Label) {
+        boolean title = name.contains("TITLE") || name.contains("CIM") || name.contains("HEADER");
+        gcSetProperty(c, "FontSize", Float.valueOf(title ? titleSize : labelSize));
+      }
+    }
+  }
+
+  @SimpleFunction(description = "Applies saved new-theme and layout preferences to the current screen. Existing four visual themes keep their original GateCraft procedures.")
+  public void PlatformApplySavedThemeLayout() {
+    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");
+    String layout = gcPlatformString(gcPlatformTinyGet("kozos_layout", "CLASSIC"), "CLASSIC");
+    PlatformApplyThemeCode(theme);
+    PlatformApplyLayoutCode(layout);
+  }
+
+  private String[] gcPlatformLanguages() {
+    return new String[]{"Magyar","English","Deutsch","Español","Français","中文","Italiano","Português","Polski","Nederlands","Română","Русский"};
+  }
+
+  private String gcPlatformJoin(String[] values) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < values.length; i++) {
+      if (i > 0) sb.append(',');
+      sb.append(values[i]);
+    }
+    return sb.toString();
+  }
+
+  private String gcPlatformText(String key, int languageIndex) {
+    int l = languageIndex < 1 || languageIndex > 12 ? 2 : languageIndex;
+    String[][] t = new String[][]{
+      {"PROFILE_TITLE","Profil","Profile","Profil","Perfil","Profil","个人资料","Profilo","Perfil","Profil","Profiel","Profil","Профиль"},
+      {"PROFILE_NAME","Név","Name","Name","Nombre","Nom","姓名","Nome","Nome","Imię","Naam","Nume","Имя"},
+      {"PROFILE_COMPANY","Vállalkozás / cég","Company","Firma","Empresa","Entreprise","公司","Azienda","Empresa","Firma","Bedrijf","Companie","Компания"},
+      {"PROFILE_PHONE","Telefon","Phone","Telefon","Teléfono","Téléphone","电话","Telefono","Telefone","Telefon","Telefoon","Telefon","Телефон"},
+      {"PROFILE_EMAIL","E-mail","E-mail","E-Mail","Correo","E-mail","电子邮件","E-mail","E-mail","E-mail","E-mail","E-mail","Эл. почта"},
+      {"PROFILE_ADDRESS","Cím","Address","Adresse","Dirección","Adresse","地址","Indirizzo","Endereço","Adres","Adres","Adresă","Адрес"},
+      {"PROFILE_COUNTRY","Ország","Country","Land","País","Pays","国家","Paese","País","Kraj","Land","Țară","Страна"},
+      {"PROFILE_CURRENCY","Pénznem","Currency","Währung","Moneda","Devise","货币","Valuta","Moeda","Waluta","Valuta","Monedă","Валюта"},
+      {"PROFILE_UNIT","Mértékegység","Units","Einheiten","Unidades","Unités","单位","Unità","Unidades","Jednostki","Eenheden","Unități","Единицы"},
+      {"PROFILE_LANGUAGE","Nyelv","Language","Sprache","Idioma","Langue","语言","Lingua","Idioma","Język","Taal","Limbă","Язык"},
+      {"PROFILE_THEME","Téma","Theme","Thema","Tema","Thème","主题","Tema","Tema","Motyw","Thema","Temă","Тема"},
+      {"PROFILE_LAYOUT","Elrendezés","Layout","Layout","Diseño","Disposition","布局","Layout","Layout","Układ","Indeling","Aspect","Макет"},
+      {"PROFILE_SAVE","Mentés","Save","Speichern","Guardar","Enregistrer","保存","Salva","Guardar","Zapisz","Opslaan","Salvează","Сохранить"},
+      {"PROFILE_BACK","Vissza","Back","Zurück","Atrás","Retour","返回","Indietro","Voltar","Wstecz","Terug","Înapoi","Назад"},
+      {"PROFILE_SAVED","Profil mentve","Profile saved","Profil gespeichert","Perfil guardado","Profil enregistré","个人资料已保存","Profilo salvato","Perfil guardado","Profil zapisany","Profiel opgeslagen","Profil salvat","Профиль сохранён"}
+    };
+    for (String[] row : t) if (row[0].equals(key)) return row[l];
+    return key;
+  }
+
+  private void gcPlatformSetText(java.util.HashMap<String,Object> map, String name, String text) {
+    Object c = map.get(name);
+    if (c != null) gcSetProperty(c, "Text", text == null ? "" : text);
+  }
+
+  private void gcPlatformSetHint(java.util.HashMap<String,Object> map, String name, String text) {
+    Object c = map.get(name);
+    if (c != null) gcSetProperty(c, "Hint", text == null ? "" : text);
+  }
+
+  private void gcPlatformSetSelectionIndex(java.util.HashMap<String,Object> map, String name, int index) {
+    Object c = map.get(name);
+    if (c != null) gcSetProperty(c, "SelectionIndex", Integer.valueOf(index));
+  }
+
+  private String gcPlatformComponentText(java.util.HashMap<String,Object> map, String name) {
+    return gcPlatformString(gcPlatformGetProperty(map.get(name), "Text", ""), "");
+  }
+
+  private String gcPlatformComponentSelection(java.util.HashMap<String,Object> map, String name) {
+    return gcPlatformString(gcPlatformGetProperty(map.get(name), "Selection", ""), "");
+  }
+
+  private int gcPlatformComponentSelectionIndex(java.util.HashMap<String,Object> map, String name, int fallback) {
+    return gcPlatformInt(gcPlatformGetProperty(map.get(name), "SelectionIndex", fallback), fallback);
+  }
+
+  @SimpleFunction(description = "Loads the persistent GateCraft user profile into the fixed Screen1 profile form and localizes that form using the retained 1..12 language preference.")
+  public void ProfileLoadToScreen() {
+    java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    gcPlatformSetText(map,"LBL_PROFILE_TITLE",gcPlatformText("PROFILE_TITLE",lang));
+    gcPlatformSetHint(map,"TB_PROFILE_NAME",gcPlatformText("PROFILE_NAME",lang));
+    gcPlatformSetHint(map,"TB_PROFILE_COMPANY",gcPlatformText("PROFILE_COMPANY",lang));
+    gcPlatformSetHint(map,"TB_PROFILE_PHONE",gcPlatformText("PROFILE_PHONE",lang));
+    gcPlatformSetHint(map,"TB_PROFILE_EMAIL",gcPlatformText("PROFILE_EMAIL",lang));
+    gcPlatformSetHint(map,"TB_PROFILE_ADDRESS",gcPlatformText("PROFILE_ADDRESS",lang));
+    gcPlatformSetHint(map,"TB_PROFILE_COUNTRY",gcPlatformText("PROFILE_COUNTRY",lang));
+    gcPlatformSetText(map,"LBL_PROFILE_CURRENCY",gcPlatformText("PROFILE_CURRENCY",lang));
+    gcPlatformSetText(map,"LBL_PROFILE_UNIT",gcPlatformText("PROFILE_UNIT",lang));
+    gcPlatformSetText(map,"LBL_PROFILE_LANGUAGE",gcPlatformText("PROFILE_LANGUAGE",lang));
+    gcPlatformSetText(map,"LBL_PROFILE_THEME",gcPlatformText("PROFILE_THEME",lang));
+    gcPlatformSetText(map,"LBL_PROFILE_LAYOUT",gcPlatformText("PROFILE_LAYOUT",lang));
+    gcPlatformSetText(map,"BTN_PROFILE_SAVE",gcPlatformText("PROFILE_SAVE",lang));
+    gcPlatformSetText(map,"BTN_PROFILE_BACK",gcPlatformText("PROFILE_BACK",lang));
+
+    Object langSpinner = map.get("SP_PROFILE_LANGUAGE");
+    if (langSpinner != null) gcSetProperty(langSpinner,"ElementsFromString",gcPlatformJoin(gcPlatformLanguages()));
+    Object themeSpinner = map.get("SP_PROFILE_THEME");
+    if (themeSpinner != null) gcSetProperty(themeSpinner,"ElementsFromString","Standard,Ocean,Forge,Industrial,Carbon,Blueprint,Forest,HiVis");
+    Object layoutSpinner = map.get("SP_PROFILE_LAYOUT");
+    if (layoutSpinner != null) gcSetProperty(layoutSpinner,"ElementsFromString","Classic,Compact,Touch,Dense");
+    Object currencySpinner = map.get("SP_PROFILE_CURRENCY");
+    if (currencySpinner != null) gcSetProperty(currencySpinner,"ElementsFromString","HUF,EUR,USD,GBP,PLN,RON,CZK");
+    Object unitSpinner = map.get("SP_PROFILE_UNIT");
+    if (unitSpinner != null) gcSetProperty(unitSpinner,"ElementsFromString","mm,in");
+
+    gcPlatformSetText(map,"TB_PROFILE_NAME",gcPlatformString(gcPlatformTinyGet("GC_PROFILE_NAME",""),""));
+    gcPlatformSetText(map,"TB_PROFILE_COMPANY",gcPlatformString(gcPlatformTinyGet("GC_PROFILE_COMPANY",""),""));
+    gcPlatformSetText(map,"TB_PROFILE_PHONE",gcPlatformString(gcPlatformTinyGet("GC_PROFILE_PHONE",""),""));
+    gcPlatformSetText(map,"TB_PROFILE_EMAIL",gcPlatformString(gcPlatformTinyGet("GC_PROFILE_EMAIL",""),""));
+    gcPlatformSetText(map,"TB_PROFILE_ADDRESS",gcPlatformString(gcPlatformTinyGet("GC_PROFILE_ADDRESS",""),""));
+    gcPlatformSetText(map,"TB_PROFILE_COUNTRY",gcPlatformString(gcPlatformTinyGet("GC_PROFILE_COUNTRY",""),""));
+
+    String currency = gcPlatformString(gcPlatformTinyGet("GC_PROFILE_CURRENCY","HUF"),"HUF");
+    String unit = gcPlatformString(gcPlatformTinyGet("unit","mm"),"mm");
+    String layout = gcPlatformLayoutCode(gcPlatformTinyGet("kozos_layout","CLASSIC"));
+    int currencyIndex = 1;
+    String[] currencies = new String[]{"HUF","EUR","USD","GBP","PLN","RON","CZK"};
+    for (int i=0;i<currencies.length;i++) if (currencies[i].equalsIgnoreCase(currency)) currencyIndex=i+1;
+    gcPlatformSetSelectionIndex(map,"SP_PROFILE_CURRENCY",currencyIndex);
+    gcPlatformSetSelectionIndex(map,"SP_PROFILE_UNIT","in".equalsIgnoreCase(unit)?2:1);
+    gcPlatformSetSelectionIndex(map,"SP_PROFILE_LANGUAGE",lang);
+    gcPlatformSetSelectionIndex(map,"SP_PROFILE_THEME",gcPlatformThemeIndex(gcPlatformString(gcPlatformTinyGet("kozos_tema","default"),"default")));
+    gcPlatformSetSelectionIndex(map,"SP_PROFILE_LAYOUT","COMPACT".equals(layout)?2:("TOUCH".equals(layout)?3:("DENSE".equals(layout)?4:1)));
+    gcPlatformSetText(map,"LBL_PROFILE_STATUS","");
+  }
+
+  @SimpleFunction(description = "Saves the fixed Screen1 GateCraft profile form and updates persistent units/language/theme/layout preferences. The profile is retained across app updates.")
+  public void ProfileSaveFromScreen() {
+    java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+    int lang = gcPlatformComponentSelectionIndex(map,"SP_PROFILE_LANGUAGE",1);
+    int theme = gcPlatformComponentSelectionIndex(map,"SP_PROFILE_THEME",1);
+    String layout = gcPlatformComponentSelection(map,"SP_PROFILE_LAYOUT");
+    if (layout.length()==0) layout="Classic";
+    String unit = gcPlatformComponentSelection(map,"SP_PROFILE_UNIT");
+    if (unit.length()==0) unit="mm";
+    String currency = gcPlatformComponentSelection(map,"SP_PROFILE_CURRENCY");
+    if (currency.length()==0) currency="HUF";
+
+    gcPlatformTinyPut("GC_PROFILE_VERSION",1);
+    gcPlatformTinyPut("GC_PROFILE_NAME",gcPlatformComponentText(map,"TB_PROFILE_NAME"));
+    gcPlatformTinyPut("GC_PROFILE_COMPANY",gcPlatformComponentText(map,"TB_PROFILE_COMPANY"));
+    gcPlatformTinyPut("GC_PROFILE_PHONE",gcPlatformComponentText(map,"TB_PROFILE_PHONE"));
+    gcPlatformTinyPut("GC_PROFILE_EMAIL",gcPlatformComponentText(map,"TB_PROFILE_EMAIL"));
+    gcPlatformTinyPut("GC_PROFILE_ADDRESS",gcPlatformComponentText(map,"TB_PROFILE_ADDRESS"));
+    gcPlatformTinyPut("GC_PROFILE_COUNTRY",gcPlatformComponentText(map,"TB_PROFILE_COUNTRY"));
+    gcPlatformTinyPut("GC_PROFILE_CURRENCY",currency);
+    gcPlatformTinyPut("unit",unit);
+    PlatformSetLanguagePreference(lang);
+    String themeCode = gcPlatformThemeCode(theme);
+    gcPlatformTinyPut("kozos_tema",themeCode);
+    String layoutCode = gcPlatformLayoutCode(layout);
+    gcPlatformTinyPut("kozos_layout",layoutCode);
+    gcPlatformSetText(map,"LBL_PROFILE_STATUS",gcPlatformText("PROFILE_SAVED",lang));
+    PlatformApplyThemeCode(themeCode);
+    PlatformApplyLayoutCode(layoutCode);
+  }
+
+  @SimpleFunction(description = "Returns true after the GateCraft user has saved a profile at least once.")
+  public boolean ProfileExists() {
+    return gcPlatformInt(gcPlatformTinyGet("GC_PROFILE_VERSION",0),0) > 0;
+  }
+
+  @SimpleFunction(description = "Returns one stored GateCraft profile field by short key NAME, COMPANY, PHONE, EMAIL, ADDRESS, COUNTRY, CURRENCY, UNIT, LANGUAGE, THEME or LAYOUT.")
+  public Object ProfileGet(String field, Object fallback) {
+    String f = field == null ? "" : field.trim().toUpperCase(java.util.Locale.ROOT);
+    if ("NAME".equals(f)) return gcPlatformTinyGet("GC_PROFILE_NAME",fallback);
+    if ("COMPANY".equals(f)) return gcPlatformTinyGet("GC_PROFILE_COMPANY",fallback);
+    if ("PHONE".equals(f)) return gcPlatformTinyGet("GC_PROFILE_PHONE",fallback);
+    if ("EMAIL".equals(f)) return gcPlatformTinyGet("GC_PROFILE_EMAIL",fallback);
+    if ("ADDRESS".equals(f)) return gcPlatformTinyGet("GC_PROFILE_ADDRESS",fallback);
+    if ("COUNTRY".equals(f)) return gcPlatformTinyGet("GC_PROFILE_COUNTRY",fallback);
+    if ("CURRENCY".equals(f)) return gcPlatformTinyGet("GC_PROFILE_CURRENCY",fallback);
+    if ("UNIT".equals(f)) return gcPlatformTinyGet("unit",fallback);
+    if ("LANGUAGE".equals(f)) return gcPlatformTinyGet("GC_PROFILE_LANG_INDEX",fallback);
+    if ("THEME".equals(f)) return gcPlatformTinyGet("kozos_tema",fallback);
+    if ("LAYOUT".equals(f)) return gcPlatformTinyGet("kozos_layout",fallback);
+    return fallback;
+  }
