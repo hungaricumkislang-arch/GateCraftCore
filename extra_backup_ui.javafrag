@@ -1,0 +1,18 @@
+  @SimpleFunction(description = "Applies all GateCraft backup/restore UI captions on Screen1 using the retained 1..12 platform language preference.")
+  public void BackupApplyUi() {
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    String[][] items = new String[][]{
+      {"BTN_BACKUP_OPEN", "OPEN"},
+      {"LBL_BACKUP_TITLE", "TITLE"},
+      {"LBL_BACKUP_DESC", "DESC"},
+      {"BTN_BACKUP_CREATE", "CREATE"},
+      {"FP_BACKUP_LOAD", "LOAD"},
+      {"BTN_BACKUP_SNAPSHOT", "SNAPSHOT"},
+      {"BTN_BACKUP_BACK", "BACK"}
+    };
+    for (String[] item : items) {
+      Object component = gcResolveNamedComponent(map, item[0]);
+      if (component != null) gcSetProperty(component, "Text", BackupUiText(item[1], lang));
+    }
+  }
