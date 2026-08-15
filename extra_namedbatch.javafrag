@@ -1,0 +1,212 @@
+  // ------------------------------------------------------------------
+  // GateCraft named-component batch engine (v3.0)
+  // Removes large concrete component lists from Blockly/YAIL while
+  // preserving the exact existing batch semantics.
+  // ------------------------------------------------------------------
+
+  private static final class GcNamedBatchRecord {
+    String mode;
+    String target;
+    String property;
+    String indexSpec;
+    String[] componentNames;
+  }
+
+  private java.util.HashMap<String, GcNamedBatchRecord> gcNamedBatchCache = null;
+  private String gcNamedBatchLoadError = "";
+
+  private synchronized void gcEnsureNamedBatch() {
+    if (gcNamedBatchCache != null) return;
+    java.util.HashMap<String, GcNamedBatchRecord> loaded =
+        new java.util.HashMap<String, GcNamedBatchRecord>();
+    java.io.InputStream raw = null;
+    java.util.zip.GZIPInputStream gzip = null;
+    try {
+      raw = com.google.appinventor.components.runtime.util.MediaUtil.openMedia(form, "gc_namedbatch.dat");
+      gzip = new java.util.zip.GZIPInputStream(raw);
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      byte[] buffer = new byte[8192];
+      int n;
+      while ((n = gzip.read(buffer)) >= 0) if (n > 0) out.write(buffer, 0, n);
+      String data = new String(out.toByteArray(), "UTF-8");
+      java.util.ArrayList<String> fields = gcSplitNulFields(data);
+      int pos = 0;
+      while (pos < fields.size()) {
+        if (pos + 5 >= fields.size()) throw new java.io.IOException("Truncated gc_namedbatch.dat header");
+        String key = fields.get(pos++);
+        GcNamedBatchRecord rec = new GcNamedBatchRecord();
+        rec.mode = fields.get(pos++);
+        rec.target = fields.get(pos++);
+        rec.property = fields.get(pos++);
+        rec.indexSpec = fields.get(pos++);
+        int count = Integer.parseInt(fields.get(pos++));
+        if (count < 0 || pos + count > fields.size()) {
+          throw new java.io.IOException("Invalid named batch component count for " + key);
+        }
+        rec.componentNames = new String[count];
+        for (int i = 0; i < count; i++) rec.componentNames[i] = fields.get(pos++);
+        loaded.put(key, rec);
+      }
+      gcNamedBatchLoadError = "";
+    } catch (Throwable ex) {
+      gcNamedBatchLoadError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      loaded.clear();
+    } finally {
+      try { if (gzip != null) gzip.close(); else if (raw != null) raw.close(); } catch (Throwable ignored) { }
+    }
+    gcNamedBatchCache = loaded;
+  }
+
+  private String gcReadComponentName(Object component) {
+    if (component == null) return "";
+    Class<?> type = component.getClass();
+    while (type != null) {
+      try {
+        java.lang.reflect.Field f = type.getDeclaredField("componentName");
+        f.setAccessible(true);
+        Object value = f.get(component);
+        if (value != null) {
+          String name = String.valueOf(value);
+          if (name.length() > 0) return name;
+        }
+      } catch (Throwable ignored) { }
+      type = type.getSuperclass();
+    }
+    return "";
+  }
+
+  private java.util.HashMap<String, Object> gcBuildNamedComponentMap() {
+    java.util.HashMap<String, Object> map = new java.util.HashMap<String, Object>();
+    if (form == null) return map;
+    String formClass = form.getClass().getSimpleName();
+    if (formClass != null && formClass.length() > 0) map.put(formClass, form);
+    try {
+      java.lang.reflect.Field childrenField =
+          com.google.appinventor.components.runtime.Form.class.getDeclaredField("allChildren");
+      childrenField.setAccessible(true);
+      Object childrenValue = childrenField.get(form);
+      if (childrenValue instanceof java.util.List) {
+        for (Object component : (java.util.List<?>) childrenValue) {
+          String name = gcReadComponentName(component);
+          if (name.length() > 0) map.put(name, component);
+        }
+      }
+    } catch (Throwable ignored) { }
+
+    // Fallback for runtime variants where Form.allChildren changes. Kawa-generated
+    // screen classes also keep component instances in fields. We do not rely on
+    // the field name; the component's own componentName is the canonical key.
+    Class<?> type = form.getClass();
+    while (type != null) {
+      java.lang.reflect.Field[] fs;
+      try { fs = type.getDeclaredFields(); } catch (Throwable ex) { fs = new java.lang.reflect.Field[0]; }
+      for (java.lang.reflect.Field f : fs) {
+        try {
+          f.setAccessible(true);
+          Object value = f.get(form);
+          if (value instanceof com.google.appinventor.components.runtime.Component) {
+            String name = gcReadComponentName(value);
+            if (name.length() > 0) map.put(name, value);
+          }
+        } catch (Throwable ignored) { }
+      }
+      type = type.getSuperclass();
+    }
+    return map;
+  }
+
+  private Object gcResolveNamedComponent(java.util.HashMap<String, Object> map, String name) {
+    if (map == null || name == null) return null;
+    Object value = map.get(name);
+    if (value != null) return value;
+    if (form != null && name.equals(form.getClass().getSimpleName())) return form;
+    return null;
+  }
+
+  private GcNamedBatchRecord gcNamedPlan(String planKey, String expectedMode) {
+    gcEnsureNamedBatch();
+    if (gcNamedBatchCache == null || planKey == null) return null;
+    GcNamedBatchRecord rec = gcNamedBatchCache.get(planKey);
+    if (rec == null) return null;
+    if (expectedMode != null && !expectedMode.equals(rec.mode)) return null;
+    return rec;
+  }
+
+  @SimpleFunction(description = "Applies a prevalidated static UI operation plan by App Inventor component names, without passing concrete component lists through YAIL.")
+  public void BatchApplyNamedTextOps(String planKey) {
+    GcNamedBatchRecord rec = gcNamedPlan(planKey, "TEXTOPS");
+    if (rec == null || rec.componentNames == null) return;
+    gcEnsureTextOps();
+    if (gcTextOpsCache == null) return;
+    GcTextOpsRecord ops = gcTextOpsCache.get(rec.target);
+    if (ops == null || ops.properties == null || ops.values == null) return;
+    if (rec.componentNames.length != ops.properties.length || ops.properties.length != ops.values.length) return;
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    for (int i = 0; i < rec.componentNames.length; i++) {
+      Object component = gcResolveNamedComponent(map, rec.componentNames[i]);
+      if (component == null) return;
+      gcSetProperty(component, ops.properties[i], ops.values[i]);
+    }
+  }
+
+  @SimpleFunction(description = "Applies an exact six-language GateCraft UI plan by App Inventor component names, eliminating concrete component-list YAIL.")
+  public void BatchApplyNamedLangPlan(String planKey, double languageIndex) {
+    GcNamedBatchRecord rec = gcNamedPlan(planKey, "LANG");
+    if (rec == null || rec.componentNames == null) return;
+    gcEnsureLangPlans();
+    if (gcLangPlanCache == null) return;
+    GcLangPlanRecord plan = gcLangPlanCache.get(rec.target);
+    if (plan == null || plan.languages == null || plan.componentCount != rec.componentNames.length) return;
+    int lang = (int) Math.round(languageIndex);
+    if (lang < 1 || lang > 6) lang = 1;
+    GcLangPlanOps ops = plan.languages[lang - 1];
+    if (ops == null) return;
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    for (int i = 0; i < ops.componentIndexes.length; i++) {
+      int componentIndex = ops.componentIndexes[i];
+      if (componentIndex < 1 || componentIndex > rec.componentNames.length) return;
+      Object component = gcResolveNamedComponent(map, rec.componentNames[componentIndex - 1]);
+      if (component == null) return;
+      gcSetProperty(component, ops.properties[i], ops.values[i]);
+    }
+  }
+
+  @SimpleFunction(description = "Sets one stored property on a stored list of App Inventor component names.")
+  public void BatchSetNamedProperty(String planKey, Object value) {
+    GcNamedBatchRecord rec = gcNamedPlan(planKey, "SET");
+    if (rec == null || rec.componentNames == null) return;
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    for (String name : rec.componentNames) {
+      Object component = gcResolveNamedComponent(map, name);
+      if (component == null) return;
+      gcSetProperty(component, rec.property, value);
+    }
+  }
+
+  @SimpleFunction(description = "Sets stored properties on stored App Inventor component names using source-list values selected by a stored index specification.")
+  public void BatchSetNamedPropertyByIndexSpec(String planKey, YailList sourceValues) {
+    GcNamedBatchRecord rec = gcNamedPlan(planKey, "INDEX");
+    if (rec == null || rec.componentNames == null || sourceValues == null) return;
+    java.util.ArrayList<Integer> indices = gcParseIndexSpec(rec.indexSpec);
+    int count = Math.min(rec.componentNames.length, indices.size());
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    for (int i = 0; i < count; i++) {
+      int sourceIndex = indices.get(i);
+      if (sourceIndex < 1 || sourceIndex > sourceValues.size()) continue;
+      Object component = gcResolveNamedComponent(map, rec.componentNames[i]);
+      if (component == null) return;
+      gcSetProperty(component, rec.property, sourceValues.getObject(sourceIndex - 1));
+    }
+  }
+
+  @SimpleFunction(description = "Returns the number of loaded GateCraft named batch plans.")
+  public double NamedBatchCount() {
+    gcEnsureNamedBatch();
+    return gcNamedBatchCache == null ? 0.0d : gcNamedBatchCache.size();
+  }
+
+  @SimpleFunction(description = "Returns the last GateCraft named-batch asset load error, or empty string on success.")
+  public String NamedBatchError() {
+    gcEnsureNamedBatch();
+    return gcNamedBatchLoadError == null ? "" : gcNamedBatchLoadError;
+  }
