@@ -1,0 +1,142 @@
+  // ------------------------------------------------------------------
+  // Technical Guide v3.3 relevance + presentation upgrade
+  // ------------------------------------------------------------------
+
+  private String tgV2Suffix(int lang) {
+    switch(lang) {
+      case 1:return "_hu"; case 2:return "_en"; case 3:return "_de"; case 4:return "_es";
+      case 5:return "_fr"; case 6:return "_zh"; case 7:return "_it"; case 8:return "_pt";
+      case 9:return "_pl"; case 10:return "_nl"; case 11:return "_ro"; case 12:return "_ru";
+      default:return "_en";
+    }
+  }
+
+  private int tgV2Lang(double languageIndex) {
+    int l=(int)Math.round(languageIndex); return l<1||l>12?2:l;
+  }
+
+  private String tgV2Text(Object record,String base,int lang) {
+    Object v=mdGet(record,base+tgV2Suffix(lang),null);
+    String s=v==null?"":mdString(v).trim();
+    if(s.length()==0 && lang!=2) s=mdString(mdGet(record,base+"_en","")).trim();
+    if(s.length()==0) s=mdString(mdGet(record,base+"_hu","")).trim();
+    if(s.length()==0) s=mdString(mdGet(record,base,"")).trim();
+    return s;
+  }
+
+  private YailList tgV2List(Object record,String base,int lang) {
+    Object v=mdGet(record,base+tgV2Suffix(lang),null);
+    if(!(v instanceof YailList) && !(v instanceof java.util.List)) v=mdGet(record,base+"_en",null);
+    if(!(v instanceof YailList) && !(v instanceof java.util.List)) v=mdGet(record,base+"_hu",null);
+    if(!(v instanceof YailList) && !(v instanceof java.util.List)) v=mdGet(record,base,null);
+    return YailList.makeList(mdList(v));
+  }
+
+  private int tgV2PhraseScore(String hay,String query,java.util.ArrayList<String> tokens,int exact,int prefix,int contains,int tokenScore) {
+    if(hay==null)hay=""; if(query==null)query="";
+    if(query.length()>0) {
+      if(hay.equals(query)) return exact;
+      if(hay.startsWith(query)) return prefix;
+      if(hay.contains(query)) return contains;
+    }
+    int score=0; for(String t:tokens) if(hay.contains(t)) score+=tokenScore; return score;
+  }
+
+  private int tgV2Score(Object rec,Object query,int lang) {
+    String q=tgAsciiNorm(query); java.util.ArrayList<String> toks=tgTokens(query);
+    if(q.length()==0)return 1;
+    String title=tgAsciiNorm(tgV2Text(rec,"title",lang));
+    String aliases=tgAsciiNorm(mdGet(rec,"alias_tokens",""));
+    String keywords=tgAsciiNorm(mdGet(rec,"keyword_tokens",""));
+    String summary=tgAsciiNorm(tgV2Text(rec,"short_summary",lang));
+    String what=tgAsciiNorm(tgV2Text(rec,"what_is_it",lang));
+    String use=tgAsciiNorm(tgV2Text(rec,"what_for",lang));
+    String pack=tgAsciiNorm(mdGet(rec,"pack_id",""));
+    String cat=tgAsciiNorm(mdGet(rec,"category_id",""))+" "+tgAsciiNorm(mdGet(rec,"subcategory_id",""));
+    int score=0;
+    score+=tgV2PhraseScore(title,q,toks,120,95,70,18);
+    score+=tgV2PhraseScore(aliases,q,toks,80,60,45,13);
+    score+=tgV2PhraseScore(keywords,q,toks,75,55,40,12);
+    score+=tgV2PhraseScore(summary,q,toks,40,32,24,6);
+    score+=tgV2PhraseScore(what,q,toks,24,18,14,3);
+    score+=tgV2PhraseScore(use,q,toks,24,18,14,3);
+    score+=tgV2PhraseScore(pack+" "+cat,q,toks,12,10,8,2);
+    int tokenHits=0; for(String t:toks) if(title.contains(t)||aliases.contains(t)||keywords.contains(t)||summary.contains(t)||what.contains(t)||use.contains(t)) tokenHits++;
+    if(!toks.isEmpty() && tokenHits==0)return 0;
+    if(tokenHits==toks.size())score+=20;
+    String status=tgAsciiNorm(mdGet(rec,"status","")); if("VERIFIED".equals(status)||"REVIEWED".equals(status))score+=2;
+    return score;
+  }
+
+  @SimpleFunction(description="Improved Technical Guide search: phrase/title matches dominate, partial useful matches remain, irrelevant category-only matches are suppressed.")
+  public YailList TechGuideSearchV2(YailList articles,YailList workflows,Object query,String contentType,String trade,String level,boolean onlyVerified,boolean offlineOnly,double languageIndex) {
+    int lang=tgV2Lang(languageIndex); String ct=tgAsciiNorm(contentType); java.util.ArrayList<YailList> found=new java.util.ArrayList<YailList>();
+    if(articles!=null) for(int i=0;i<articles.size();i++) {
+      Object r=articles.getObject(i); String at=tgAsciiNorm(mdGet(r,"article_type","KNOWLEDGE"));
+      if(ct.length()>0&&!"ALL".equals(ct)&&!"MINDEN".equals(ct)&&!ct.equals(at))continue;
+      if(!tgListContainsNorm(mdGet(r,"trade_codes",YailList.makeEmptyList()),trade))continue;
+      if(!tgLevelMatches(r,level))continue; if(onlyVerified&&!tgVerified(r))continue; if(offlineOnly&&!tgOffline(r))continue;
+      int sc=tgV2Score(r,query,lang); if(sc<=0)continue;
+      String id=mdString(mdGet(r,"article_id","")); String title=tgV2Text(r,"title",lang); String sum=tgV2Text(r,"short_summary",lang);
+      found.add(list("ARTICLE",id,title,sum,(double)sc,mdString(mdGet(r,"pack_id","CORE")),mdString(mdGet(r,"category_id","")),at));
+    }
+    if((ct.length()==0||"ALL".equals(ct)||"MINDEN".equals(ct)||"WORKFLOW".equals(ct))&&workflows!=null) for(int i=0;i<workflows.size();i++) {
+      Object r=workflows.getObject(i); if(!tgListContainsNorm(mdGet(r,"trade_codes",YailList.makeEmptyList()),trade))continue;
+      if(!tgLevelMatches(r,level))continue; if(onlyVerified&&!tgVerified(r))continue; if(offlineOnly&&!tgOffline(r))continue;
+      int sc=tgV2Score(r,query,lang); if(sc<=0)continue;
+      found.add(list("WORKFLOW",mdString(mdGet(r,"workflow_id","")),tgV2Text(r,"title",lang),tgV2Text(r,"short_summary",lang),(double)sc,mdString(mdGet(r,"pack_id","CORE")),mdString(mdGet(r,"category_id","")),"WORKFLOW"));
+    }
+    java.util.Collections.sort(found,new java.util.Comparator<YailList>(){ public int compare(YailList a,YailList b){ int c=Double.compare(SafeNumber(b.getObject(4),0),SafeNumber(a.getObject(4),0)); if(c!=0)return c; return mdString(a.getObject(2)).compareToIgnoreCase(mdString(b.getObject(2))); }});
+    java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); int max=Math.min(found.size(),250); for(int i=0;i<max;i++)out.add(found.get(i)); return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Cleaner Technical Guide result rows showing the useful title/summary before technical metadata.")
+  public YailList TechGuideBuildResultDisplayV2(YailList results) {
+    java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); if(results==null)return YailList.makeList(out);
+    for(int i=0;i<results.size();i++) { java.util.ArrayList<Object>a=mdList(results.getObject(i)); String title=a.size()>2?mdString(a.get(2)):""; String sum=a.size()>3?mdString(a.get(3)):""; String pack=a.size()>5?mdString(a.get(5)):""; if(sum.length()>160)sum=sum.substring(0,157)+"…"; out.add(title+(sum.length()>0?"\n"+sum:"")+(pack.length()>0?"\n· "+pack:"")); }
+    return YailList.makeList(out);
+  }
+
+  private boolean tgV2Generic(String s) {
+    String n=tgAsciiNorm(s);
+    return n.contains("FOGALOM ESZKOZ ANYAG VAGY TECHNOLOGIAI ELEM")
+        || n.contains("CONCEPT TOOL MATERIAL OR PROCESS ELEMENT")
+        || n.contains("KONTROLLIERT UND WIEDERHOLBAR")
+        || n.contains("CONTROLLED REPEATABLE WAY USING A SUITABLE METHOD");
+  }
+
+  private String tgV2JoinBullets(YailList l) {
+    StringBuilder sb=new StringBuilder(); if(l==null)return ""; for(int i=0;i<l.size();i++){String s=mdString(l.getObject(i)).trim(); if(s.length()==0)continue; if(sb.length()>0)sb.append("\n"); sb.append("• ").append(s);} return sb.toString();
+  }
+
+  private String tgV2Steps(Object record,int lang) {
+    java.util.ArrayList<Object> steps=mdList(mdGet(record,"steps",YailList.makeEmptyList())); StringBuilder sb=new StringBuilder(); int shown=0;
+    for(Object st:steps){String title=tgV2Text(st,"title",lang);String text=tgV2Text(st,"text",lang);String warn=tgV2Text(st,"warning",lang);String check=tgV2Text(st,"check_point",lang); if(title.length()==0&&text.length()==0)continue; shown++; if(sb.length()>0)sb.append("\n\n"); sb.append(shown).append(". ").append(title); if(text.length()>0)sb.append("\n").append(text); if(check.length()>0)sb.append("\n✓ ").append(check); if(warn.length()>0)sb.append("\n⚠ ").append(warn);}
+    return sb.toString();
+  }
+
+  private void tgV2SetText(java.util.HashMap<String,Object> map,String name,String value) { Object c=map.get(name); if(c!=null)gcSetProperty(c,"Text",value==null?"":value); }
+  private void tgV2SetElements(java.util.HashMap<String,Object> map,String name,YailList value) { Object c=map.get(name); if(c!=null)gcSetProperty(c,"Elements",value==null?YailList.makeEmptyList():value); }
+  private void tgV2Section(java.util.HashMap<String,Object> map,String name,boolean visible) { Object c=map.get(name); if(c!=null)gcSetProperty(c,"Visible",Boolean.valueOf(visible)); }
+
+  @SimpleFunction(description="Applies a Technical Guide article to the current article page, hides empty/generic filler sections and places useful content first.")
+  public void TechGuideApplyArticleV2(Object record,double languageIndex) {
+    int lang=tgV2Lang(languageIndex); java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    String title=tgV2Text(record,"title",lang); String summary=tgV2Text(record,"short_summary",lang); String what=tgV2Text(record,"what_is_it",lang); String use=tgV2Text(record,"what_for",lang);
+    if(tgV2Generic(what))what=""; if(tgV2Generic(use))use="";
+    tgV2SetText(map,"LBL_TG_ArticleTitle",title);
+    String cat=mdString(mdGet(record,"subcategory_id",mdGet(record,"category_id",""))).replace("CAT_","").replace('_',' '); tgV2SetText(map,"LBL_TG_ArticleCategory",cat);
+    tgV2SetText(map,"LBL_TG_ArticleMeta","");
+    tgV2SetText(map,"LBL_TG_ArticleSummary",summary); tgV2Section(map,"VA_TG_ArticleSummary",summary.length()>0);
+    tgV2SetText(map,"LBL_TG_ArticleWhat",what); tgV2Section(map,"VA_TG_ArticleWhat",what.length()>0);
+    tgV2SetText(map,"LBL_TG_ArticleUse",use); tgV2Section(map,"VA_TG_ArticleUse",use.length()>0);
+    YailList when=tgV2List(record,"when_to_use",lang); tgV2SetElements(map,"LV_TG_ArticleWhen",when); tgV2Section(map,"VA_TG_ArticleWhen",when.size()>0);
+    YailList not=tgV2List(record,"when_not_to_use",lang); tgV2SetElements(map,"LV_TG_ArticleWhenNot",not); tgV2Section(map,"VA_TG_ArticleWhenNot",not.size()>0);
+    String steps=tgV2Steps(record,lang); Object stepView=map.get("LV_TG_ArticleSteps"); if(stepView!=null)gcSetProperty(stepView,"Elements",steps.length()==0?YailList.makeEmptyList():YailList.makeList(java.util.Arrays.asList(steps.split("\\n\\n")))); tgV2Section(map,"VA_TG_ArticleSteps",steps.length()>0);
+    YailList mistakes=tgV2List(record,"common_mistakes",lang); tgV2SetElements(map,"LV_TG_ArticleMistakes",mistakes); tgV2Section(map,"VA_TG_ArticleMistakes",mistakes.size()>0);
+    String safety=tgV2Text(record,"safety_text",lang); tgV2SetText(map,"LBL_TG_ArticleSafety",safety); tgV2Section(map,"VA_TG_ArticleSafety",safety.length()>0);
+    String beginner=tgV2Text(record,"beginner_text",lang); if(tgV2Generic(beginner))beginner=""; tgV2SetText(map,"LBL_TG_ArticleBeginner",beginner); tgV2Section(map,"VA_TG_ArticleBeginner",beginner.length()>0);
+    String advanced=tgV2Text(record,"advanced_text",lang); tgV2SetText(map,"LBL_TG_ArticleAdvanced",advanced); tgV2Section(map,"VA_TG_ArticleAdvanced",advanced.length()>0);
+    YailList tips=tgV2List(record,"pro_tips",lang); tgV2SetElements(map,"LV_TG_ArticleTips",tips); tgV2Section(map,"VA_TG_ArticleTips",tips.size()>0);
+    String source=tgV2Text(record,"source_display",lang); if(source.length()==0){String note=mdString(mdGet(record,"source_note",""));String url=mdString(mdGet(record,"source_url",""));String date=mdString(mdGet(record,"verified_date",""));source=(note.length()>0?note:"")+(date.length()>0?" · "+date:"")+(url.length()>0?"\n"+url:"");} tgV2SetText(map,"LBL_TG_ArticleSource",source); tgV2Section(map,"VA_TG_ArticleSource",source.trim().length()>0);
+  }
