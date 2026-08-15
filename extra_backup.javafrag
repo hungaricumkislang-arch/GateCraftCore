@@ -1,0 +1,408 @@
+  // ------------------------------------------------------------------
+  // GateCraft backup / restore engine v3.2
+  // Versioned .gcb payload, SHA-256 integrity, automatic pre-restore
+  // snapshot, URI import and shareable file export.
+  // ------------------------------------------------------------------
+
+  private static final String GC_BACKUP_FORMAT = "GateCraftBackup";
+  private static final int GC_BACKUP_VERSION = 1;
+  private static final String GC_BACKUP_NAMESPACE = "App";
+  private static final String GC_BACKUP_SYSTEM_DIR = "gatecraft_backup";
+  private static final String GC_BACKUP_SNAPSHOT_FILE = "restore_snapshot.gcb";
+  private String gcBackupLastError = "";
+  private String gcBackupLastPath = "";
+
+  private android.content.SharedPreferences gcBackupPrefs() {
+    return ((android.content.Context) form).getSharedPreferences(
+        GC_BACKUP_NAMESPACE, android.content.Context.MODE_PRIVATE);
+  }
+
+  private java.io.File gcBackupPrivateDir() {
+    java.io.File dir = new java.io.File(form.getFilesDir(), GC_BACKUP_SYSTEM_DIR);
+    if (!dir.exists()) dir.mkdirs();
+    return dir;
+  }
+
+  private java.io.File gcBackupSnapshotFile() {
+    return new java.io.File(gcBackupPrivateDir(), GC_BACKUP_SNAPSHOT_FILE);
+  }
+
+  private String gcBackupAppVersion() {
+    try {
+      android.content.pm.PackageInfo info = form.getPackageManager()
+          .getPackageInfo(form.getPackageName(), 0);
+      return info.versionName == null ? "" : info.versionName;
+    } catch (Throwable ignored) {
+      return "";
+    }
+  }
+
+  private String gcBackupIso(long millis) {
+    try {
+      java.text.SimpleDateFormat f = new java.text.SimpleDateFormat(
+          "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", java.util.Locale.US);
+      return f.format(new java.util.Date(millis));
+    } catch (Throwable ignored) {
+      return String.valueOf(millis);
+    }
+  }
+
+  private String gcBackupHex(byte[] bytes) {
+    StringBuilder sb = new StringBuilder(bytes.length * 2);
+    for (byte b : bytes) sb.append(String.format(java.util.Locale.US, "%02x", b & 0xff));
+    return sb.toString();
+  }
+
+  private String gcBackupSha256(String value) throws Exception {
+    java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+    return gcBackupHex(md.digest((value == null ? "" : value).getBytes("UTF-8")));
+  }
+
+  private String gcBackupType(Object value) {
+    if (value instanceof String) return "s";
+    if (value instanceof Boolean) return "b";
+    if (value instanceof Integer) return "i";
+    if (value instanceof Long) return "l";
+    if (value instanceof Float) return "f";
+    return "s";
+  }
+
+  private String gcBackupValueString(Object value, String type) {
+    if (value == null) return "";
+    if ("b".equals(type)) return Boolean.toString(((Boolean) value).booleanValue());
+    if ("i".equals(type)) return Integer.toString(((Integer) value).intValue());
+    if ("l".equals(type)) return Long.toString(((Long) value).longValue());
+    if ("f".equals(type)) return Float.toString(((Float) value).floatValue());
+    return String.valueOf(value);
+  }
+
+  private String gcBackupCanonical(int version, long created, String appVersion,
+      org.json.JSONObject entries) throws Exception {
+    java.util.ArrayList<String> keys = new java.util.ArrayList<String>();
+    java.util.Iterator<String> it = entries.keys();
+    while (it.hasNext()) keys.add(it.next());
+    java.util.Collections.sort(keys);
+    StringBuilder sb = new StringBuilder();
+    sb.append(GC_BACKUP_FORMAT).append('|').append(version).append('|')
+        .append(created).append('|').append(appVersion == null ? "" : appVersion)
+        .append('|').append(GC_BACKUP_NAMESPACE).append('|').append(keys.size()).append('|');
+    for (String key : keys) {
+      org.json.JSONObject item = entries.getJSONObject(key);
+      String type = item.optString("t", "s");
+      String value = item.optString("v", "");
+      sb.append(key.length()).append(':').append(key).append(':')
+          .append(type).append(':').append(value.length()).append(':').append(value).append('|');
+    }
+    return sb.toString();
+  }
+
+  private String gcBackupCreateTextInternal(long created) throws Exception {
+    java.util.Map<String, ?> all = gcBackupPrefs().getAll();
+    java.util.ArrayList<String> keys = new java.util.ArrayList<String>(all.keySet());
+    java.util.Collections.sort(keys);
+    org.json.JSONObject entries = new org.json.JSONObject();
+    for (String key : keys) {
+      Object value = all.get(key);
+      String type = gcBackupType(value);
+      org.json.JSONObject item = new org.json.JSONObject();
+      item.put("t", type);
+      item.put("v", gcBackupValueString(value, type));
+      entries.put(key, item);
+    }
+    String appVersion = gcBackupAppVersion();
+    String canonical = gcBackupCanonical(GC_BACKUP_VERSION, created, appVersion, entries);
+    String checksum = gcBackupSha256(canonical);
+    org.json.JSONObject root = new org.json.JSONObject();
+    root.put("format", GC_BACKUP_FORMAT);
+    root.put("backupVersion", GC_BACKUP_VERSION);
+    root.put("appVersion", appVersion);
+    root.put("created", created);
+    root.put("createdIso", gcBackupIso(created));
+    root.put("namespace", GC_BACKUP_NAMESPACE);
+    root.put("entryCount", keys.size());
+    root.put("entries", entries);
+    root.put("checksum", checksum);
+    return root.toString();
+  }
+
+  private org.json.JSONObject gcBackupParseAndValidate(String text) throws Exception {
+    if (text == null || text.trim().length() == 0) throw new Exception("Empty backup");
+    org.json.JSONObject root = new org.json.JSONObject(text);
+    if (!GC_BACKUP_FORMAT.equals(root.optString("format", "")))
+      throw new Exception("Not a GateCraft backup");
+    int version = root.optInt("backupVersion", -1);
+    if (version != GC_BACKUP_VERSION)
+      throw new Exception("Unsupported backup version: " + version);
+    if (!GC_BACKUP_NAMESPACE.equals(root.optString("namespace", "")))
+      throw new Exception("Unsupported namespace");
+    long created = root.optLong("created", 0L);
+    String appVersion = root.optString("appVersion", "");
+    org.json.JSONObject entries = root.optJSONObject("entries");
+    if (entries == null) throw new Exception("Missing entries");
+    if (root.optInt("entryCount", -1) != entries.length())
+      throw new Exception("Entry count mismatch");
+    String expected = root.optString("checksum", "");
+    String actual = gcBackupSha256(gcBackupCanonical(version, created, appVersion, entries));
+    if (expected.length() == 0 || !expected.equalsIgnoreCase(actual))
+      throw new Exception("Checksum mismatch");
+    return root;
+  }
+
+  private void gcBackupWriteUtf8(java.io.File file, String text) throws Exception {
+    java.io.File parent = file.getParentFile();
+    if (parent != null && !parent.exists() && !parent.mkdirs())
+      throw new java.io.IOException("Cannot create backup directory");
+    java.io.OutputStream out = null;
+    try {
+      out = new java.io.BufferedOutputStream(new java.io.FileOutputStream(file, false));
+      out.write((text == null ? "" : text).getBytes("UTF-8"));
+      out.flush();
+    } finally {
+      if (out != null) try { out.close(); } catch (Throwable ignored) { }
+    }
+  }
+
+  private String gcBackupReadStream(java.io.InputStream in) throws Exception {
+    if (in == null) throw new java.io.FileNotFoundException("Backup stream is null");
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    byte[] buffer = new byte[8192];
+    long total = 0;
+    int n;
+    while ((n = in.read(buffer)) >= 0) {
+      if (n <= 0) continue;
+      total += n;
+      if (total > 64L * 1024L * 1024L) throw new java.io.IOException("Backup file is too large");
+      out.write(buffer, 0, n);
+    }
+    return new String(out.toByteArray(), "UTF-8");
+  }
+
+  private String gcBackupReadLocation(String location) throws Exception {
+    if (location == null || location.trim().length() == 0)
+      throw new java.io.FileNotFoundException("Empty backup location");
+    String s = location.trim();
+    java.io.InputStream in = null;
+    try {
+      if (s.startsWith("content://") || s.startsWith("android.resource://")) {
+        in = form.getContentResolver().openInputStream(android.net.Uri.parse(s));
+      } else if (s.startsWith("file://")) {
+        in = new java.io.FileInputStream(new java.io.File(android.net.Uri.parse(s).getPath()));
+      } else {
+        in = new java.io.FileInputStream(new java.io.File(s));
+      }
+      return gcBackupReadStream(in);
+    } finally {
+      if (in != null) try { in.close(); } catch (Throwable ignored) { }
+    }
+  }
+
+  private boolean gcBackupCreateSnapshotInternal() {
+    try {
+      String text = gcBackupCreateTextInternal(System.currentTimeMillis());
+      gcBackupWriteUtf8(gcBackupSnapshotFile(), text);
+      return true;
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return false;
+    }
+  }
+
+  private boolean gcBackupRestoreTextInternal(String text, boolean makeSnapshot) {
+    try {
+      org.json.JSONObject root = gcBackupParseAndValidate(text);
+      if (makeSnapshot && !gcBackupCreateSnapshotInternal()) return false;
+      org.json.JSONObject entries = root.getJSONObject("entries");
+      java.util.ArrayList<String> keys = new java.util.ArrayList<String>();
+      java.util.Iterator<String> it = entries.keys();
+      while (it.hasNext()) keys.add(it.next());
+      java.util.Collections.sort(keys);
+      android.content.SharedPreferences prefs = gcBackupPrefs();
+      android.content.SharedPreferences.Editor editor = prefs.edit();
+      editor.clear();
+      for (String key : keys) {
+        org.json.JSONObject item = entries.getJSONObject(key);
+        String type = item.optString("t", "s");
+        String value = item.optString("v", "");
+        if ("b".equals(type)) editor.putBoolean(key, Boolean.parseBoolean(value));
+        else if ("i".equals(type)) editor.putInt(key, Integer.parseInt(value));
+        else if ("l".equals(type)) editor.putLong(key, Long.parseLong(value));
+        else if ("f".equals(type)) editor.putFloat(key, Float.parseFloat(value));
+        else editor.putString(key, value);
+      }
+      if (!editor.commit()) throw new java.io.IOException("TinyDB restore commit failed");
+      gcBackupLastError = "";
+      return true;
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Returns the current GateCraft backup format version.")
+  public double BackupVersion() {
+    return (double) GC_BACKUP_VERSION;
+  }
+
+  @SimpleFunction(description = "Creates a complete versioned GateCraft backup text from the App TinyDB namespace.")
+  public String BackupCreateText() {
+    try {
+      String result = gcBackupCreateTextInternal(System.currentTimeMillis());
+      gcBackupLastError = "";
+      return result;
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return "";
+    }
+  }
+
+  @SimpleFunction(description = "Creates a shareable .gcb backup file and returns its absolute path, or empty text on failure.")
+  public String BackupCreateFile() {
+    try {
+      long now = System.currentTimeMillis();
+      String text = gcBackupCreateTextInternal(now);
+      java.io.File base = form.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS);
+      if (base == null) base = form.getFilesDir();
+      java.io.File dir = new java.io.File(base, "GateCraft/Backups");
+      String stamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HHmmss", java.util.Locale.US)
+          .format(new java.util.Date(now));
+      java.io.File file = new java.io.File(dir, "GateCraft_Backup_" + stamp + ".gcb");
+      gcBackupWriteUtf8(file, text);
+      gcBackupLastPath = file.getAbsolutePath();
+      gcBackupLastError = "";
+      return gcBackupLastPath;
+    } catch (Throwable ex) {
+      gcBackupLastPath = "";
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return "";
+    }
+  }
+
+  @SimpleFunction(description = "Returns the last backup file path created by BackupCreateFile.")
+  public String BackupLastCreatedPath() {
+    return gcBackupLastPath == null ? "" : gcBackupLastPath;
+  }
+
+  @SimpleFunction(description = "Validates a GateCraft .gcb backup text including SHA-256 integrity.")
+  public boolean BackupValidate(String backupText) {
+    try {
+      gcBackupParseAndValidate(backupText);
+      gcBackupLastError = "";
+      return true;
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Validates a GateCraft backup selected by file/content URI.")
+  public boolean BackupValidateUri(String location) {
+    try {
+      gcBackupParseAndValidate(gcBackupReadLocation(location));
+      gcBackupLastError = "";
+      return true;
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Returns [valid, version, createdIso, appVersion, entryCount, checksum, error] for backup text.")
+  public YailList BackupInfo(String backupText) {
+    try {
+      org.json.JSONObject root = gcBackupParseAndValidate(backupText);
+      gcBackupLastError = "";
+      return list(true, (double) root.optInt("backupVersion", 0),
+          root.optString("createdIso", gcBackupIso(root.optLong("created", 0L))),
+          root.optString("appVersion", ""), (double) root.optInt("entryCount", 0),
+          root.optString("checksum", ""), "");
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return list(false, 0.0d, "", "", 0.0d, "", gcBackupLastError);
+    }
+  }
+
+  @SimpleFunction(description = "Returns [valid, version, createdIso, appVersion, entryCount, checksum, error] for a selected backup URI/path.")
+  public YailList BackupInfoUri(String location) {
+    try {
+      return BackupInfo(gcBackupReadLocation(location));
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return list(false, 0.0d, "", "", 0.0d, "", gcBackupLastError);
+    }
+  }
+
+  @SimpleFunction(description = "Restores a validated GateCraft backup text. A private snapshot of current data is created first.")
+  public boolean BackupRestore(String backupText) {
+    return gcBackupRestoreTextInternal(backupText, true);
+  }
+
+  @SimpleFunction(description = "Restores a validated GateCraft backup selected by file/content URI. A private snapshot is created first.")
+  public boolean BackupRestoreUri(String location) {
+    try {
+      return gcBackupRestoreTextInternal(gcBackupReadLocation(location), true);
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Creates a private rollback snapshot of the current GateCraft TinyDB data.")
+  public boolean BackupCreateSnapshot() {
+    gcBackupLastError = "";
+    return gcBackupCreateSnapshotInternal();
+  }
+
+  @SimpleFunction(description = "Returns true when a pre-restore rollback snapshot exists.")
+  public boolean BackupHasSnapshot() {
+    try {
+      java.io.File f = gcBackupSnapshotFile();
+      return f.exists() && f.isFile() && f.length() > 0L;
+    } catch (Throwable ignored) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Restores the last private rollback snapshot without overwriting it first.")
+  public boolean BackupRestoreSnapshot() {
+    try {
+      java.io.File f = gcBackupSnapshotFile();
+      if (!f.exists()) throw new java.io.FileNotFoundException("No rollback snapshot");
+      java.io.InputStream in = null;
+      String text;
+      try {
+        in = new java.io.BufferedInputStream(new java.io.FileInputStream(f));
+        text = gcBackupReadStream(in);
+      } finally {
+        if (in != null) try { in.close(); } catch (Throwable ignored) { }
+      }
+      return gcBackupRestoreTextInternal(text, false);
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Returns metadata for the private rollback snapshot.")
+  public YailList BackupSnapshotInfo() {
+    try {
+      java.io.File f = gcBackupSnapshotFile();
+      if (!f.exists()) return list(false, 0.0d, "", "", 0.0d, "", "No rollback snapshot");
+      java.io.InputStream in = null;
+      String text;
+      try {
+        in = new java.io.BufferedInputStream(new java.io.FileInputStream(f));
+        text = gcBackupReadStream(in);
+      } finally {
+        if (in != null) try { in.close(); } catch (Throwable ignored) { }
+      }
+      return BackupInfo(text);
+    } catch (Throwable ex) {
+      gcBackupLastError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      return list(false, 0.0d, "", "", 0.0d, "", gcBackupLastError);
+    }
+  }
+
+  @SimpleFunction(description = "Returns the last GateCraft backup/restore engine error, or empty text after success.")
+  public String BackupLastError() {
+    return gcBackupLastError == null ? "" : gcBackupLastError;
+  }
