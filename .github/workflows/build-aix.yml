@@ -60,7 +60,8 @@ jobs:
               'extra_techguide.javafrag', 'extra_techguide_display.javafrag', 'extra_stairpro.javafrag',
               'extra_stairpro_display.javafrag', 'extra_namedbatch.javafrag', 'extra_platform.javafrag',
               'extra_backup.javafrag', 'extra_backup_lang.javafrag', 'extra_backup_ui.javafrag',
-              'extra_v33_ui.javafrag', 'extra_techguide_v2.javafrag', 'extra_projecthub.javafrag']:
+              'extra_v33_ui.javafrag', 'extra_techguide_v2.javafrag', 'extra_projecthub.javafrag',
+              'extra_v33_runtime.javafrag']:
               fragments.append(Path(fp).read_text(encoding='utf-8'))
           pos = s.rfind('}')
           if pos < 0:
