@@ -1,0 +1,131 @@
+  // ------------------------------------------------------------------
+  // GateCraft v3.3 runtime wrappers / low-YAIL screen bridges
+  // ------------------------------------------------------------------
+
+  @SimpleFunction(description = "Applies the saved layout plus the visible four-theme compatibility layer on modern GateCraft screens.")
+  public void PlatformApplyCurrentUi() {
+    PlatformApplySavedThemeLayout();
+    PlatformApplyModernFourTheme();
+  }
+
+  @SimpleFunction(description = "Normalizes deprecated theme preferences to Standard and configures the four supported theme plus layout selectors on Screen1.")
+  public void PlatformPrepareScreen1Ui() {
+    String code = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");
+    int index = gcPlatformThemeIndex(code);
+    if (index < 1 || index > 4) {
+      gcPlatformTinyPut("kozos_tema", "default");
+    }
+    PlatformConfigureFourThemeSelectors();
+  }
+
+  private void gcProjectSetText(java.util.HashMap<String,Object> map,String name,String value) {
+    Object c=map.get(name); if(c!=null) gcSetProperty(c,"Text",value==null?"":value);
+  }
+  private void gcProjectSetHint(java.util.HashMap<String,Object> map,String name,String value) {
+    Object c=map.get(name); if(c!=null) gcSetProperty(c,"Hint",value==null?"":value);
+  }
+  private String gcProjectGetText(java.util.HashMap<String,Object> map,String name) {
+    Object c=map.get(name); return c==null?"":gcPlatformString(gcPlatformGetProperty(c,"Text",""),"");
+  }
+  private int gcProjectGetSelectionIndex(java.util.HashMap<String,Object> map,String name) {
+    Object c=map.get(name); return c==null?1:gcPlatformInt(gcPlatformGetProperty(c,"SelectionIndex",1),1);
+  }
+  private void gcProjectSetSelectionIndex(java.util.HashMap<String,Object> map,String name,int index) {
+    Object c=map.get(name); if(c!=null)gcSetProperty(c,"SelectionIndex",Integer.valueOf(index));
+  }
+  private void gcProjectSetVisible(java.util.HashMap<String,Object> map,String name,boolean visible) {
+    Object c=map.get(name); if(c!=null)gcSetProperty(c,"Visible",Boolean.valueOf(visible));
+  }
+
+  private void gcProjectRefresh(java.util.HashMap<String,Object> map) {
+    Object lv=map.get("LV_PROJECTS");
+    if(lv!=null) {
+      YailList rows=ProjectHubAll();
+      gcSetProperty(lv,"Elements",ProjectHubDisplay(rows,PlatformLanguagePreference()));
+    }
+    Object empty=map.get("LBL_PROJECT_EMPTY");
+    if(empty!=null) {
+      YailList rows=ProjectHubAll();
+      gcSetProperty(empty,"Text",gcProjectUiText("EMPTY",(int)Math.round(PlatformLanguagePreference())));
+      gcSetProperty(empty,"Visible",Boolean.valueOf(rows.size()==0));
+    }
+  }
+
+  @SimpleFunction(description = "Opens the Screen1 Project Center as a full-page view and refreshes its project list.")
+  public void ProjectHubOpenPage() {
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    gcProjectSetVisible(map,"VA_UJ_FO",false);
+    gcProjectSetVisible(map,"VA_PROFILE",false);
+    gcProjectSetVisible(map,"VA_BACKUP",false);
+    Object page=map.get("VA_PROJECT_HUB");
+    if(page!=null) { gcSetProperty(page,"Width",Integer.valueOf(-2)); gcSetProperty(page,"Height",Integer.valueOf(-2)); gcSetProperty(page,"Visible",Boolean.TRUE); }
+    ProjectHubApplyUi();
+    gcProjectRefresh(map);
+  }
+
+  @SimpleFunction(description = "Closes the Screen1 Project Center and returns to the normal main page.")
+  public void ProjectHubClosePage() {
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    gcProjectSetVisible(map,"VA_PROJECT_HUB",false);
+    gcProjectSetVisible(map,"VA_UJ_FO",true);
+  }
+
+  @SimpleFunction(description = "Clears Project Center editor fields for a new project.")
+  public void ProjectHubNewFromScreen() {
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    gcProjectSetText(map,"LBL_PROJECT_CURRENT_ID","");
+    for(String n:new String[]{"TB_PROJECT_NAME","TB_PROJECT_CLIENT","TB_PROJECT_SITE","TB_PROJECT_TYPE","TB_PROJECT_NOTE"})gcProjectSetText(map,n,"");
+    gcProjectSetSelectionIndex(map,"SP_PROJECT_STATUS",1);
+  }
+
+  @SimpleFunction(description = "Loads the selected Project Center ListView row into the editor fields. Selection index is one-based.")
+  public boolean ProjectHubSelectFromScreen(double selectionIndex) {
+    int idx=(int)Math.round(selectionIndex)-1;
+    java.util.ArrayList<Object> rows=gcProjectRows();
+    if(idx<0||idx>=rows.size())return false;
+    java.util.ArrayList<Object> r=mdList(rows.get(idx)); if(r.size()<9)return false;
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    gcProjectSetText(map,"LBL_PROJECT_CURRENT_ID",mdString(r.get(0)));
+    gcProjectSetText(map,"TB_PROJECT_NAME",mdString(r.get(1)));
+    gcProjectSetText(map,"TB_PROJECT_CLIENT",mdString(r.get(2)));
+    gcProjectSetText(map,"TB_PROJECT_SITE",mdString(r.get(3)));
+    gcProjectSetText(map,"TB_PROJECT_TYPE",mdString(r.get(4)));
+    gcProjectSetSelectionIndex(map,"SP_PROJECT_STATUS",(int)Math.round(ProjectHubStatusIndex(mdString(r.get(5)))));
+    gcProjectSetText(map,"TB_PROJECT_NOTE",mdString(r.get(6)));
+    return true;
+  }
+
+  @SimpleFunction(description = "Creates or updates the current Project Center record from Screen1 editor controls and refreshes the list.")
+  public String ProjectHubSaveFromScreen() {
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    String id=gcProjectGetText(map,"LBL_PROJECT_CURRENT_ID").trim();
+    String name=gcProjectGetText(map,"TB_PROJECT_NAME");
+    String client=gcProjectGetText(map,"TB_PROJECT_CLIENT");
+    String site=gcProjectGetText(map,"TB_PROJECT_SITE");
+    String type=gcProjectGetText(map,"TB_PROJECT_TYPE");
+    String note=gcProjectGetText(map,"TB_PROJECT_NOTE");
+    String status=ProjectHubStatusCode(gcProjectGetSelectionIndex(map,"SP_PROJECT_STATUS"));
+    if(id.length()==0) {
+      id=ProjectHubCreate(name,client,site,type,note);
+      if(!"SURVEY".equals(status)) ProjectHubUpdate(id,name,client,site,type,status,note);
+    } else {
+      ProjectHubUpdate(id,name,client,site,type,status,note);
+    }
+    gcProjectSetText(map,"LBL_PROJECT_CURRENT_ID",id);
+    gcProjectRefresh(map);
+    return id;
+  }
+
+  @SimpleFunction(description = "Deletes the currently loaded Project Center record and clears the editor. Returns false if none is selected.")
+  public boolean ProjectHubDeleteFromScreen() {
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    String id=gcProjectGetText(map,"LBL_PROJECT_CURRENT_ID").trim();
+    if(id.length()==0)return false;
+    boolean ok=ProjectHubDelete(id);
+    if(ok){ProjectHubNewFromScreen();gcProjectRefresh(map);} return ok;
+  }
+
+  @SimpleFunction(description = "Refreshes the Project Center UI texts, theme and project list without reopening the page.")
+  public void ProjectHubRefreshPage() {
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap(); ProjectHubApplyUi(); gcProjectRefresh(map);
+  }
