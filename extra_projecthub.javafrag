@@ -1,0 +1,101 @@
+  // ------------------------------------------------------------------
+  // GateCraft Project Center v1
+  // Lightweight central project registry stored in the existing App namespace.
+  // ------------------------------------------------------------------
+  private static final String GC_PROJECTS_KEY="GC_PROJECTS_V1";
+
+  private java.util.ArrayList<Object> gcProjectRows() {
+    Object raw=gcPlatformTinyGet(GC_PROJECTS_KEY,YailList.makeEmptyList());
+    return mdList(raw);
+  }
+
+  private String gcProjectId() {
+    return "GC-"+new java.text.SimpleDateFormat("yyyyMMdd-HHmmss",java.util.Locale.US).format(new java.util.Date())+"-"+Integer.toHexString((int)(System.nanoTime()&0xffff)).toUpperCase(java.util.Locale.ROOT);
+  }
+
+  private YailList gcProjectRow(String id,String name,String client,String site,String type,String status,String note,long created,long updated) {
+    return list(id,name,client,site,type,status,note,(double)created,(double)updated);
+  }
+
+  private void gcProjectStore(java.util.ArrayList<Object> rows) { gcPlatformTinyPut(GC_PROJECTS_KEY,YailList.makeList(rows)); }
+
+  @SimpleFunction(description="Returns all GateCraft Project Center records. Record=[id,name,client,site,type,status,note,createdMs,updatedMs].")
+  public YailList ProjectHubAll() { return YailList.makeList(gcProjectRows()); }
+
+  @SimpleFunction(description="Creates a GateCraft project and returns its project id.")
+  public String ProjectHubCreate(String name,String client,String site,String type,String note) {
+    java.util.ArrayList<Object> rows=gcProjectRows(); long now=System.currentTimeMillis(); String id=gcProjectId();
+    String n=name==null?"":name.trim(); if(n.length()==0)n="Projekt "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.US).format(new java.util.Date(now));
+    rows.add(0,gcProjectRow(id,n,client==null?"":client.trim(),site==null?"":site.trim(),type==null?"":type.trim(),"SURVEY",note==null?"":note.trim(),now,now)); gcProjectStore(rows); return id;
+  }
+
+  @SimpleFunction(description="Updates a GateCraft project. Empty project id or unknown id returns false.")
+  public boolean ProjectHubUpdate(String id,String name,String client,String site,String type,String status,String note) {
+    java.util.ArrayList<Object> rows=gcProjectRows(); boolean changed=false; long now=System.currentTimeMillis();
+    for(int i=0;i<rows.size();i++){java.util.ArrayList<Object> r=mdList(rows.get(i)); if(r.size()<9)continue; if(!mdString(r.get(0)).equals(id))continue; long created=(long)Math.round(SafeNumber(r.get(7),now)); rows.set(i,gcProjectRow(id,name,client,site,type,status,note,created,now)); changed=true; break;}
+    if(changed)gcProjectStore(rows); return changed;
+  }
+
+  @SimpleFunction(description="Deletes one GateCraft Project Center record by id.")
+  public boolean ProjectHubDelete(String id) {
+    java.util.ArrayList<Object> rows=gcProjectRows(); boolean changed=false; for(int i=rows.size()-1;i>=0;i--){java.util.ArrayList<Object> r=mdList(rows.get(i)); if(r.size()>0&&mdString(r.get(0)).equals(id)){rows.remove(i);changed=true;}}
+    if(changed)gcProjectStore(rows); return changed;
+  }
+
+  @SimpleFunction(description="Returns one GateCraft project record by id, or an empty list.")
+  public YailList ProjectHubGet(String id) {
+    for(Object x:gcProjectRows()){java.util.ArrayList<Object> r=mdList(x);if(r.size()>0&&mdString(r.get(0)).equals(id))return YailList.makeList(r);}return YailList.makeEmptyList();
+  }
+
+  private String gcProjectStatus(String code,int lang) {
+    String c=code==null?"":code.toUpperCase(java.util.Locale.ROOT);
+    String[] survey={"Felmérés","Survey","Aufmaß","Relevamiento","Relevé","测量","Sopralluogo","Levantamento","Pomiar","Opname","Măsurare","Замер"};
+    String[] calc={"Kalkuláció","Calculation","Kalkulation","Cálculo","Calcul","计算","Calcolo","Cálculo","Kalkulacja","Calculatie","Calcul","Расчёт"};
+    String[] offer={"Ajánlat","Quote","Angebot","Oferta","Devis","报价","Preventivo","Orçamento","Oferta","Offerte","Ofertă","Предложение"};
+    String[] accepted={"Elfogadva","Accepted","Angenommen","Aceptado","Accepté","已接受","Accettato","Aceite","Zaakceptowano","Geaccepteerd","Acceptat","Принято"};
+    String[] production={"Gyártás","Production","Fertigung","Producción","Fabrication","生产","Produzione","Produção","Produkcja","Productie","Producție","Производство"};
+    String[] install={"Telepítés","Installation","Montage","Instalación","Installation","安装","Installazione","Instalação","Montaż","Installatie","Instalare","Монтаж"};
+    String[] done={"Kész","Done","Fertig","Terminado","Terminé","完成","Completato","Concluído","Gotowe","Gereed","Finalizat","Готово"};
+    String[] service={"Szerviz","Service","Service","Servicio","Service","服务","Assistenza","Assistência","Serwis","Service","Service","Сервис"};
+    String[][] arr={survey,calc,offer,accepted,production,install,done,service}; String[] codes={"SURVEY","CALCULATION","QUOTE","ACCEPTED","PRODUCTION","INSTALLATION","DONE","SERVICE"};
+    int li=lang<1||lang>12?1:lang; for(int i=0;i<codes.length;i++)if(codes[i].equals(c))return arr[i][li-1]; return c;
+  }
+
+  @SimpleFunction(description="Returns Project Center list display rows in the selected 1..12 GateCraft language.")
+  public YailList ProjectHubDisplay(YailList rows,double languageIndex) {
+    int lang=(int)Math.round(languageIndex); if(lang<1||lang>12)lang=1; java.util.ArrayList<Object> out=new java.util.ArrayList<Object>(); if(rows==null)return YailList.makeList(out);
+    for(int i=0;i<rows.size();i++){java.util.ArrayList<Object> r=mdList(rows.getObject(i)); if(r.size()<9)continue; String name=mdString(r.get(1));String client=mdString(r.get(2));String site=mdString(r.get(3));String st=gcProjectStatus(mdString(r.get(5)),lang); String line=name+"\n"+st; if(client.length()>0)line+=" · "+client; if(site.length()>0)line+=" · "+site; out.add(line);} return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description="Returns the internal Project Center status code for spinner index 1..8.")
+  public String ProjectHubStatusCode(double index) { int i=(int)Math.round(index); String[] a={"SURVEY","CALCULATION","QUOTE","ACCEPTED","PRODUCTION","INSTALLATION","DONE","SERVICE"}; return i>=1&&i<=a.length?a[i-1]:"SURVEY"; }
+
+  @SimpleFunction(description="Returns the spinner index for a Project Center internal status code.")
+  public double ProjectHubStatusIndex(String code) { String[] a={"SURVEY","CALCULATION","QUOTE","ACCEPTED","PRODUCTION","INSTALLATION","DONE","SERVICE"}; for(int i=0;i<a.length;i++)if(a[i].equalsIgnoreCase(code))return i+1; return 1; }
+
+  private String gcProjectUiText(String key,int lang) {
+    String[][] rows={
+      {"TITLE","Projektközpont","Project Center","Projektzentrale","Centro de proyectos","Centre de projets","项目中心","Centro progetti","Centro de projetos","Centrum projektów","Projectcentrum","Centru proiecte","Центр проектов"},
+      {"NAME","Projekt neve","Project name","Projektname","Nombre del proyecto","Nom du projet","项目名称","Nome progetto","Nome do projeto","Nazwa projektu","Projectnaam","Nume proiect","Название проекта"},
+      {"CLIENT","Ügyfél","Client","Kunde","Cliente","Client","客户","Cliente","Cliente","Klient","Klant","Client","Клиент"},
+      {"SITE","Helyszín","Site","Ort","Lugar","Lieu","地点","Luogo","Local","Miejsce","Locatie","Locație","Объект"},
+      {"TYPE","Munka típusa","Job type","Auftragstyp","Tipo de trabajo","Type de travail","工作类型","Tipo lavoro","Tipo de trabalho","Typ pracy","Type werk","Tip lucrare","Тип работы"},
+      {"STATUS","Állapot","Status","Status","Estado","Statut","状态","Stato","Estado","Status","Status","Stare","Статус"},
+      {"NOTE","Megjegyzés","Note","Notiz","Nota","Note","备注","Nota","Nota","Notatka","Notitie","Notă","Примечание"},
+      {"NEW","Új projekt","New project","Neues Projekt","Nuevo proyecto","Nouveau projet","新建项目","Nuovo progetto","Novo projeto","Nowy projekt","Nieuw project","Proiect nou","Новый проект"},
+      {"SAVE","Mentés","Save","Speichern","Guardar","Enregistrer","保存","Salva","Guardar","Zapisz","Opslaan","Salvează","Сохранить"},
+      {"DELETE","Törlés","Delete","Löschen","Eliminar","Supprimer","删除","Elimina","Eliminar","Usuń","Verwijderen","Șterge","Удалить"},
+      {"BACK","Vissza","Back","Zurück","Atrás","Retour","返回","Indietro","Voltar","Wstecz","Terug","Înapoi","Назад"},
+      {"EMPTY","Nincs még projekt.","No projects yet.","Noch keine Projekte.","Aún no hay proyectos.","Aucun projet.","暂无项目。","Nessun progetto.","Ainda não há projetos.","Brak projektów.","Nog geen projecten.","Nu există proiecte.","Проектов пока нет."}
+    };
+    int l=lang<1||lang>12?2:lang; for(String[] r:rows)if(r[0].equals(key))return r[l]; return key;
+  }
+
+  @SimpleFunction(description="Applies Project Center 12-language texts and the current four-theme palette to the Screen1 project page.")
+  public void ProjectHubApplyUi() {
+    int lang=(int)Math.round(PlatformLanguagePreference()); java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    String[][] names={{"LBL_PROJECT_TITLE","TITLE"},{"TB_PROJECT_NAME","NAME"},{"TB_PROJECT_CLIENT","CLIENT"},{"TB_PROJECT_SITE","SITE"},{"TB_PROJECT_TYPE","TYPE"},{"LBL_PROJECT_STATUS","STATUS"},{"TB_PROJECT_NOTE","NOTE"},{"BTN_PROJECT_NEW","NEW"},{"BTN_PROJECT_SAVE","SAVE"},{"BTN_PROJECT_DELETE","DELETE"},{"BTN_PROJECT_BACK","BACK"}};
+    for(String[] x:names){Object c=map.get(x[0]);if(c==null)continue;String t=gcProjectUiText(x[1],lang); if(c instanceof com.google.appinventor.components.runtime.TextBox)gcSetProperty(c,"Hint",t);else gcSetProperty(c,"Text",t);}
+    Object sp=map.get("SP_PROJECT_STATUS");if(sp!=null){StringBuilder sb=new StringBuilder();String[] codes={"SURVEY","CALCULATION","QUOTE","ACCEPTED","PRODUCTION","INSTALLATION","DONE","SERVICE"};for(int i=0;i<codes.length;i++){if(i>0)sb.append(',');sb.append(gcProjectStatus(codes[i],lang));}gcSetProperty(sp,"ElementsFromString",sb.toString());}
+    gcV33StyleScreen1Overlay(map,"PROJECT");
+  }
