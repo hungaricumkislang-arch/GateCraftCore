@@ -1,0 +1,19 @@
+  // ------------------------------------------------------------------
+  // Screen1 v3.3 additions - real 12-language labels
+  // ------------------------------------------------------------------
+  @SimpleFunction(description = "Applies localized 12-language text to the new Screen1 layout selector and Project Center entry.")
+  public void PlatformApplyScreen1V33Texts() {
+    int lang=(int)Math.round(PlatformLanguagePreference()); if(lang<1||lang>12)lang=2;
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
+    Object layoutLabel=map.get("LBL_LAYOUT_DIRECT");
+    if(layoutLabel!=null) gcSetProperty(layoutLabel,"Text",gcPlatformText("PROFILE_LAYOUT",lang));
+    Object projectButton=map.get("BTN_PROJECT_OPEN");
+    if(projectButton!=null) gcSetProperty(projectButton,"Text",gcProjectUiText("TITLE",lang));
+    Object layout=map.get("layoutvalaszto");
+    if(layout!=null) {
+      gcSetProperty(layout,"ElementsFromString","Classic,Compact,Touch,Dense");
+      String lc=gcPlatformLayoutCode(gcPlatformTinyGet("kozos_layout","CLASSIC"));
+      int li="COMPACT".equals(lc)?2:("TOUCH".equals(lc)?3:("DENSE".equals(lc)?4:1));
+      gcSetProperty(layout,"SelectionIndex",Integer.valueOf(li));
+    }
+  }
