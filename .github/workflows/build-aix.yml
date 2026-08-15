@@ -1,4 +1,4 @@
-# GateCraftCore AIX build workflow v28 - brutal-build exact core + MotorDiag + Technical Guide + StairPro
+# GateCraftCore AIX build workflow v29 - brutal-build exact core + MotorDiag + Technical Guide + StairPro
 name: Build GateCraftCore AIX
 
 on:
@@ -39,7 +39,7 @@ jobs:
           tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
           find buildenv/src -maxdepth 8 -type f -print
 
-      - name: Inject GateCraftCore v2.8 StairPro helpers
+      - name: Inject GateCraftCore v2.9 StairPro helpers
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -48,8 +48,8 @@ jobs:
               raise SystemExit('Expected exactly one GateCraftCore.java, found %d' % len(matches))
           p = matches[0]
           s = p.read_text(encoding='utf-8')
-          s = s.replace('version = 10', 'version = 28', 1)
-          s = s.replace('return "1.0.0";', 'return "2.8.0";', 1)
+          s = s.replace('version = 10', 'version = 29', 1)
+          s = s.replace('return "1.0.0";', 'return "2.9.0";', 1)
           fragments = []
           for fp in [
               'extra_methods.javafrag', 'extra_names.javafrag', 'extra_algorithms.javafrag',
@@ -57,7 +57,8 @@ jobs:
               'extra_geo_missing3d.javafrag', 'extra_batch.javafrag', 'extra_lang_asset.javafrag',
               'extra_static_asset.javafrag', 'extra_textops_asset.javafrag', 'extra_langplan_asset.javafrag',
               'extra_motordiag.javafrag', 'extra_motordiag_userdata.javafrag', 'extra_motordiag_lang.javafrag',
-              'extra_techguide.javafrag', 'extra_techguide_display.javafrag', 'extra_stairpro.javafrag']:
+              'extra_techguide.javafrag', 'extra_techguide_display.javafrag', 'extra_stairpro.javafrag',
+              'extra_stairpro_display.javafrag']:
               fragments.append(Path(fp).read_text(encoding='utf-8'))
           pos = s.rfind('}')
           if pos < 0:
@@ -78,6 +79,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-v2.8-aix
+          name: GateCraftCore-v2.9-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
