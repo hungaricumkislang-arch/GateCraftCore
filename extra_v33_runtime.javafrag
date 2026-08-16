@@ -2,13 +2,14 @@
   // GateCraft v3.3 runtime wrappers / low-YAIL screen bridges
   // ------------------------------------------------------------------
 
-  @SimpleFunction(description = "Applies the saved layout plus the visible four-theme compatibility layer on modern GateCraft screens.")
+  @SimpleFunction(description = "Applies the saved GateCraft theme and the four-theme compatibility layer. Layout packs were retired in v3.4; the original layout is preserved.")
   public void PlatformApplyCurrentUi() {
-    PlatformApplySavedThemeLayout();
+    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");
+    PlatformApplyThemeCode(theme);
     PlatformApplyModernFourTheme();
   }
 
-  @SimpleFunction(description = "Normalizes deprecated theme preferences to Standard and configures the four supported theme plus layout selectors on Screen1.")
+  @SimpleFunction(description = "Normalizes deprecated theme preferences to Standard and configures the four supported themes on Screen1.")
   public void PlatformPrepareScreen1Ui() {
     String code = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");
     int index = gcPlatformThemeIndex(code);
@@ -86,6 +87,7 @@
     java.util.ArrayList<Object> r=mdList(rows.get(idx)); if(r.size()<9)return false;
     java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
     gcProjectSetText(map,"LBL_PROJECT_CURRENT_ID",mdString(r.get(0)));
+    gcPlatformTinyPut("GC_ACTIVE_PROJECT_ID",mdString(r.get(0)));
     gcProjectSetText(map,"TB_PROJECT_NAME",mdString(r.get(1)));
     gcProjectSetText(map,"TB_PROJECT_CLIENT",mdString(r.get(2)));
     gcProjectSetText(map,"TB_PROJECT_SITE",mdString(r.get(3)));
@@ -112,6 +114,7 @@
       ProjectHubUpdate(id,name,client,site,type,status,note);
     }
     gcProjectSetText(map,"LBL_PROJECT_CURRENT_ID",id);
+    gcPlatformTinyPut("GC_ACTIVE_PROJECT_ID",id);
     gcProjectRefresh(map);
     return id;
   }
