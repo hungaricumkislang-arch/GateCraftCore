@@ -1,0 +1,130 @@
+  // ------------------------------------------------------------------
+  // GateCraft Business System v1 (data schema v1)
+  // Project-bound catalog, plan/actual costs, labor time and profit.
+  // ------------------------------------------------------------------
+  private static final String GC_BUS_SCHEMA="GC_BUS_SCHEMA_VERSION";
+  private static final String GC_BUS_CATALOG="GC_BUS_CATALOG_V1";
+  private static final String GC_BUS_COSTS="GC_BUS_COSTS_V1";
+  private static final String GC_BUS_TIMES="GC_BUS_TIMES_V1";
+  private static final String GC_BUS_ACTIVE_TIMER="GC_BUS_ACTIVE_TIMER_V1";
+
+  private java.util.ArrayList<Object> gcBusRows(String key){return mdList(gcPlatformTinyGet(key,YailList.makeEmptyList()));}
+  private void gcBusPut(String key,java.util.ArrayList<Object> rows){gcPlatformTinyPut(key,YailList.makeList(rows));}
+  private String gcBusId(String prefix){return prefix+"-"+System.currentTimeMillis()+"-"+Integer.toHexString((int)(System.nanoTime()&0xffff)).toUpperCase(java.util.Locale.ROOT);}
+  private String gcBusActiveProject(){return gcPlatformString(gcPlatformTinyGet("GC_ACTIVE_PROJECT_ID",""),"").trim();}
+  private double gcBusNum(Object x){return SafeNumber(x,0);}
+  private String gcBusS(Object x){return x==null?"":String.valueOf(x).trim();}
+  private String gcBusSelection(java.util.HashMap<String,Object> map,String name){Object c=map.get(name);return c==null?"":gcPlatformString(gcPlatformGetProperty(c,"Selection",""),"");}
+
+  @SimpleFunction(description="Ensures the versioned GateCraft Business System data schema exists. Returns the schema version.")
+  public double BusinessEnsureSchema(){
+    int v=gcPlatformInt(gcPlatformTinyGet(GC_BUS_SCHEMA,0),0);
+    if(v<1){gcPlatformTinyPut(GC_BUS_SCHEMA,1);if(gcPlatformTinyGet(GC_BUS_CATALOG,null)==null)gcPlatformTinyPut(GC_BUS_CATALOG,YailList.makeEmptyList());if(gcPlatformTinyGet(GC_BUS_COSTS,null)==null)gcPlatformTinyPut(GC_BUS_COSTS,YailList.makeEmptyList());if(gcPlatformTinyGet(GC_BUS_TIMES,null)==null)gcPlatformTinyPut(GC_BUS_TIMES,YailList.makeEmptyList());}
+    return 1;
+  }
+
+  @SimpleFunction(description="Returns a compact Business System health record [ok,schema,projects,catalog,costs,timeRows,activeProject,activeTimer].")
+  public YailList BusinessHealthCheck(){BusinessEnsureSchema();String active=gcBusActiveProject();Object timer=gcPlatformTinyGet(GC_BUS_ACTIVE_TIMER,YailList.makeEmptyList());return list(true,1,ProjectHubAll().size(),gcBusRows(GC_BUS_CATALOG).size(),gcBusRows(GC_BUS_COSTS).size(),gcBusRows(GC_BUS_TIMES).size(),active,mdList(timer).size()>=5);}
+
+  // Catalog record: [id,category,name,unit,buyPrice,sellPrice,supplier,taxPercent,updatedMs]
+  @SimpleFunction(description="Returns every shared material and price catalog record.")
+  public YailList BusinessCatalogAll(){BusinessEnsureSchema();return YailList.makeList(gcBusRows(GC_BUS_CATALOG));}
+
+  @SimpleFunction(description="Creates or updates a shared material and price catalog record and returns its id.")
+  public String BusinessCatalogSave(String id,String category,String name,String unit,double buyPrice,double sellPrice,String supplier,double taxPercent){
+    BusinessEnsureSchema();java.util.ArrayList<Object> rows=gcBusRows(GC_BUS_CATALOG);String rid=gcBusS(id);if(rid.length()==0)rid=gcBusId("MAT");YailList row=list(rid,gcBusS(category),gcBusS(name),gcBusS(unit),Math.max(0,buyPrice),Math.max(0,sellPrice),gcBusS(supplier),Math.max(0,taxPercent),(double)System.currentTimeMillis());boolean found=false;for(int i=0;i<rows.size();i++){java.util.ArrayList<Object> r=mdList(rows.get(i));if(r.size()>0&&rid.equals(gcBusS(r.get(0)))){rows.set(i,row);found=true;break;}}if(!found)rows.add(0,row);gcBusPut(GC_BUS_CATALOG,rows);return rid;
+  }
+
+  @SimpleFunction(description="Deletes a shared catalog record by id.")
+  public boolean BusinessCatalogDelete(String id){java.util.ArrayList<Object> rows=gcBusRows(GC_BUS_CATALOG);boolean ok=false;for(int i=rows.size()-1;i>=0;i--){java.util.ArrayList<Object> r=mdList(rows.get(i));if(r.size()>0&&gcBusS(r.get(0)).equals(gcBusS(id))){rows.remove(i);ok=true;}}if(ok)gcBusPut(GC_BUS_CATALOG,rows);return ok;}
+
+  @SimpleFunction(description="Returns localized display rows for the shared material catalog.")
+  public YailList BusinessCatalogDisplay(){java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();for(Object x:gcBusRows(GC_BUS_CATALOG)){java.util.ArrayList<Object> r=mdList(x);if(r.size()<9)continue;out.add(gcBusS(r.get(2))+" · "+gcBusS(r.get(1))+" · "+FormatNumber(gcBusNum(r.get(4)),2)+" / "+gcBusS(r.get(3))+" → "+FormatNumber(gcBusNum(r.get(5)),2));}return YailList.makeList(out);}
+
+  // Cost record: [id,projectId,mode,category,description,quantity,unitCost,total,catalogId,createdMs,updatedMs]
+  @SimpleFunction(description="Creates or updates one project-bound PLAN or ACTUAL cost record and returns its id.")
+  public String BusinessCostSave(String id,String projectId,String mode,String category,String description,double quantity,double unitCost,String catalogId){
+    BusinessEnsureSchema();String pid=gcBusS(projectId);if(pid.length()==0)pid=gcBusActiveProject();if(pid.length()==0)return "";String m="ACTUAL".equalsIgnoreCase(mode)?"ACTUAL":"PLAN";double q=Math.max(0,quantity),u=Math.max(0,unitCost),total=q*u;java.util.ArrayList<Object> rows=gcBusRows(GC_BUS_COSTS);String rid=gcBusS(id);if(rid.length()==0)rid=gcBusId("COST");long now=System.currentTimeMillis(),created=now;for(Object x:rows){java.util.ArrayList<Object> r=mdList(x);if(r.size()>9&&rid.equals(gcBusS(r.get(0))))created=(long)gcBusNum(r.get(9));}YailList row=list(rid,pid,m,gcBusS(category),gcBusS(description),q,u,total,gcBusS(catalogId),(double)created,(double)now);boolean found=false;for(int i=0;i<rows.size();i++){java.util.ArrayList<Object> r=mdList(rows.get(i));if(r.size()>0&&rid.equals(gcBusS(r.get(0)))){rows.set(i,row);found=true;break;}}if(!found)rows.add(0,row);gcBusPut(GC_BUS_COSTS,rows);return rid;
+  }
+
+  @SimpleFunction(description="Returns project-bound cost records, optionally filtered by PLAN or ACTUAL.")
+  public YailList BusinessCosts(String projectId,String mode){String pid=gcBusS(projectId);if(pid.length()==0)pid=gcBusActiveProject();String m=gcBusS(mode).toUpperCase(java.util.Locale.ROOT);java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();for(Object x:gcBusRows(GC_BUS_COSTS)){java.util.ArrayList<Object> r=mdList(x);if(r.size()<11||!pid.equals(gcBusS(r.get(1))))continue;if(m.length()>0&&!m.equals(gcBusS(r.get(2))))continue;out.add(x);}return YailList.makeList(out);}
+
+  @SimpleFunction(description="Deletes one project cost record by id.")
+  public boolean BusinessCostDelete(String id){java.util.ArrayList<Object> rows=gcBusRows(GC_BUS_COSTS);boolean ok=false;for(int i=rows.size()-1;i>=0;i--){java.util.ArrayList<Object> r=mdList(rows.get(i));if(r.size()>0&&gcBusS(r.get(0)).equals(gcBusS(id))){rows.remove(i);ok=true;}}if(ok)gcBusPut(GC_BUS_COSTS,rows);return ok;}
+
+  @SimpleFunction(description="Starts a persistent project work timer. Phase examples: SURVEY, DESIGN, PURCHASE, PRODUCTION, FINISH, DELIVERY, INSTALLATION, SERVICE.")
+  public boolean BusinessTimerStart(String projectId,String phase,double hourlyRate,String note){String pid=gcBusS(projectId);if(pid.length()==0)pid=gcBusActiveProject();if(pid.length()==0)return false;java.util.ArrayList<Object> active=mdList(gcPlatformTinyGet(GC_BUS_ACTIVE_TIMER,YailList.makeEmptyList()));if(active.size()>=5)return false;gcPlatformTinyPut(GC_BUS_ACTIVE_TIMER,list(gcBusId("TIME"),pid,gcBusS(phase),Math.max(0,hourlyRate),gcBusS(note),(double)System.currentTimeMillis()));return true;}
+
+  @SimpleFunction(description="Stops the persistent active timer and stores a time record. Returns recorded minutes or zero.")
+  public double BusinessTimerStop(){java.util.ArrayList<Object> a=mdList(gcPlatformTinyGet(GC_BUS_ACTIVE_TIMER,YailList.makeEmptyList()));if(a.size()<6)return 0;long end=System.currentTimeMillis(),start=(long)gcBusNum(a.get(5));double minutes=Math.max(0,(end-start)/60000.0),rate=gcBusNum(a.get(3)),cost=minutes/60.0*rate;java.util.ArrayList<Object> rows=gcBusRows(GC_BUS_TIMES);rows.add(0,list(gcBusS(a.get(0)),gcBusS(a.get(1)),gcBusS(a.get(2)),(double)start,(double)end,minutes,rate,cost,gcBusS(a.get(4))));gcBusPut(GC_BUS_TIMES,rows);gcPlatformTinyPut(GC_BUS_ACTIVE_TIMER,YailList.makeEmptyList());return minutes;}
+
+  @SimpleFunction(description="Adds a manual project work-time row in minutes.")
+  public String BusinessTimeAdd(String projectId,String phase,double minutes,double hourlyRate,String note){String pid=gcBusS(projectId);if(pid.length()==0)pid=gcBusActiveProject();if(pid.length()==0)return "";long now=System.currentTimeMillis();double mins=Math.max(0,minutes),rate=Math.max(0,hourlyRate);String id=gcBusId("TIME");java.util.ArrayList<Object> rows=gcBusRows(GC_BUS_TIMES);rows.add(0,list(id,pid,gcBusS(phase),(double)now,(double)now,mins,rate,mins/60.0*rate,gcBusS(note)));gcBusPut(GC_BUS_TIMES,rows);return id;}
+
+  @SimpleFunction(description="Returns project time rows.")
+  public YailList BusinessTimes(String projectId){String pid=gcBusS(projectId);if(pid.length()==0)pid=gcBusActiveProject();java.util.ArrayList<Object> out=new java.util.ArrayList<Object>();for(Object x:gcBusRows(GC_BUS_TIMES)){java.util.ArrayList<Object> r=mdList(x);if(r.size()>=9&&pid.equals(gcBusS(r.get(1))))out.add(x);}return YailList.makeList(out);}
+
+  @SimpleFunction(description="Returns project business summary [planCost,actualMaterialCost,laborCost,actualTotal,revenue,expectedProfit,actualProfit,expectedMarginPct,actualMarginPct,plannedHours,actualHours].")
+  public YailList BusinessProjectSummary(String projectId,double revenue,double plannedHours){String pid=gcBusS(projectId);if(pid.length()==0)pid=gcBusActiveProject();double plan=0,actual=0,labor=0,actualHours=0;for(Object x:gcBusRows(GC_BUS_COSTS)){java.util.ArrayList<Object> r=mdList(x);if(r.size()<11||!pid.equals(gcBusS(r.get(1))))continue;if("PLAN".equals(gcBusS(r.get(2))))plan+=gcBusNum(r.get(7));else actual+=gcBusNum(r.get(7));}for(Object x:gcBusRows(GC_BUS_TIMES)){java.util.ArrayList<Object> r=mdList(x);if(r.size()<9||!pid.equals(gcBusS(r.get(1))))continue;actualHours+=gcBusNum(r.get(5))/60.0;labor+=gcBusNum(r.get(7));}double total=actual+labor,expected=revenue-plan,profit=revenue-total;return list(plan,actual,labor,total,revenue,expected,profit,revenue>0?expected/revenue*100:0,revenue>0?profit/revenue*100:0,Math.max(0,plannedHours),actualHours);}
+
+  @SimpleFunction(description="Applies a lightweight project template and returns the created planned cost row count.")
+  public double BusinessApplyTemplate(String projectId,String templateCode){String pid=gcBusS(projectId);if(pid.length()==0)pid=gcBusActiveProject();if(pid.length()==0)return 0;String c=gcBusS(templateCode).toUpperCase(java.util.Locale.ROOT);String[] phases;if("SERVICE".equals(c))phases=new String[]{"Felmérés","Kiszállás","Javítás","Anyag"};else if("FENCE".equals(c))phases=new String[]{"Felmérés","Anyag","Gyártás","Felületkezelés","Szállítás","Telepítés"};else phases=new String[]{"Felmérés","Tervezés","Anyag","Gyártás","Felületkezelés","Szállítás","Telepítés"};for(String p:phases)BusinessCostSave("",pid,"PLAN","TEMPLATE",p,1,0,"");return phases.length;}
+
+  private String gcBusText(String key,int lang){
+    String[][] r={
+      {"TITLE","Üzleti rendszer","Business system","Geschäftssystem","Sistema empresarial","Système commercial","业务系统","Sistema aziendale","Sistema empresarial","System biznesowy","Bedrijfssysteem","Sistem de afaceri","Бизнес-система"},
+      {"BACK","Vissza","Back","Zurück","Atrás","Retour","返回","Indietro","Voltar","Wstecz","Terug","Înapoi","Назад"},
+      {"CATALOG","Anyag- és árkatalógus","Material and price catalog","Material- und Preiskatalog","Catálogo de materiales y precios","Catalogue matériaux et prix","材料和价格目录","Catalogo materiali e prezzi","Catálogo de materiais e preços","Katalog materiałów i cen","Materiaal- en prijscatalogus","Catalog materiale și prețuri","Каталог материалов и цен"},
+      {"COST","Projektköltségek","Project costs","Projektkosten","Costes del proyecto","Coûts du projet","项目成本","Costi progetto","Custos do projeto","Koszty projektu","Projectkosten","Costuri proiect","Затраты проекта"},
+      {"TIME","Munkaidő","Work time","Arbeitszeit","Tiempo de trabajo","Temps de travail","工时","Tempo di lavoro","Tempo de trabalho","Czas pracy","Werktijd","Timp de lucru","Рабочее время"},
+      {"PROFIT","Projektprofit","Project profit","Projektgewinn","Beneficio del proyecto","Bénéfice du projet","项目利润","Profitto progetto","Lucro do projeto","Zysk projektu","Projectwinst","Profit proiect","Прибыль проекта"},
+      {"SAVE","Mentés","Save","Speichern","Guardar","Enregistrer","保存","Salva","Guardar","Zapisz","Opslaan","Salvează","Сохранить"},
+      {"DELETE","Törlés","Delete","Löschen","Eliminar","Supprimer","删除","Elimina","Eliminar","Usuń","Verwijderen","Șterge","Удалить"},
+      {"START","Időmérés indítása","Start timer","Timer starten","Iniciar temporizador","Démarrer le chrono","开始计时","Avvia timer","Iniciar cronómetro","Uruchom pomiar","Timer starten","Pornește cronometrul","Запустить таймер"},
+      {"STOP","Időmérés leállítása","Stop timer","Timer stoppen","Detener temporizador","Arrêter le chrono","停止计时","Ferma timer","Parar cronómetro","Zatrzymaj pomiar","Timer stoppen","Oprește cronometrul","Остановить таймер"},
+      {"NOPROJECT","Előbb válassz projektet a Projektközpontban.","Select a project in Project Center first.","Zuerst ein Projekt in der Projektzentrale wählen.","Selecciona primero un proyecto.","Sélectionnez d’abord un projet.","请先在项目中心选择项目。","Seleziona prima un progetto.","Selecione primeiro um projeto.","Najpierw wybierz projekt.","Selecteer eerst een project.","Selectează mai întâi un proiect.","Сначала выберите проект."}
+    };int li=lang<1||lang>12?2:lang;for(String[] x:r)if(x[0].equals(key))return x[li];return key;
+  }
+
+  @SimpleFunction(description="Applies the Business System 12-language UI and current four-theme assets to Screen1.")
+  public void BusinessApplyUi(){java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();int lang=(int)Math.round(PlatformLanguagePreference());String[][] n={{"LBL_BUS_TITLE","TITLE"},{"BTN_BUS_BACK","BACK"},{"LBL_BUS_CATALOG_TITLE","CATALOG"},{"LBL_BUS_COST_TITLE","COST"},{"LBL_BUS_TIME_TITLE","TIME"},{"LBL_BUS_PROFIT_TITLE","PROFIT"},{"BTN_BUS_CATALOG_SAVE","SAVE"},{"BTN_BUS_CATALOG_DELETE","DELETE"},{"BTN_BUS_COST_SAVE","SAVE"},{"BTN_BUS_COST_DELETE","DELETE"},{"BTN_BUS_TIMER_START","START"},{"BTN_BUS_TIMER_STOP","STOP"}};for(String[] x:n)gcProjectSetText(map,x[0],gcBusText(x[1],lang));gcV33StyleScreen1Overlay(map,"BUS");}
+
+  @SimpleFunction(description="Opens the full-page Business System bound to the active Project Center project.")
+  public void BusinessOpenPage(){BusinessEnsureSchema();java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();gcProjectSetVisible(map,"VA_UJ_FO",false);gcProjectSetVisible(map,"VA_PROFILE",false);gcProjectSetVisible(map,"VA_BACKUP",false);gcProjectSetVisible(map,"VA_PROJECT_HUB",false);Object p=map.get("VA_BUSINESS");if(p!=null){gcSetProperty(p,"Width",Integer.valueOf(-2));gcSetProperty(p,"Height",Integer.valueOf(-2));gcSetProperty(p,"Visible",Boolean.TRUE);}BusinessApplyUi();BusinessRefreshScreen();}
+
+  @SimpleFunction(description="Closes the Business System and returns to the main page.")
+  public void BusinessClosePage(){java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();gcProjectSetVisible(map,"VA_BUSINESS",false);gcProjectSetVisible(map,"VA_UJ_FO",true);}
+
+  @SimpleFunction(description="Refreshes Business System project, catalog, cost, timer and profit controls.")
+  public void BusinessRefreshScreen(){java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();String pid=gcBusActiveProject();YailList p=ProjectHubGet(pid);String project=p.size()>1?gcBusS(p.getObject(1)):gcBusText("NOPROJECT",(int)Math.round(PlatformLanguagePreference()));gcProjectSetText(map,"LBL_BUS_PROJECT",project);Object lv=map.get("LV_BUS_CATALOG");if(lv!=null)gcSetProperty(lv,"Elements",BusinessCatalogDisplay());java.util.ArrayList<Object> costLines=new java.util.ArrayList<Object>();for(Object x:mdList(BusinessCosts(pid,""))){java.util.ArrayList<Object> r=mdList(x);if(r.size()>=11)costLines.add(gcBusS(r.get(2))+" · "+gcBusS(r.get(4))+" · "+FormatNumber(gcBusNum(r.get(7)),2));}lv=map.get("LV_BUS_COSTS");if(lv!=null)gcSetProperty(lv,"Elements",YailList.makeList(costLines));double revenue=gcBusNum(gcProjectGetText(map,"TB_BUS_REVENUE")),plannedHours=gcBusNum(gcProjectGetText(map,"TB_BUS_PLANNED_HOURS"));YailList s=BusinessProjectSummary(pid,revenue,plannedHours);gcProjectSetText(map,"LBL_BUS_PROFIT_RESULT","Terv: "+FormatNumber(gcBusNum(s.getObject(0)),2)+" | Tény: "+FormatNumber(gcBusNum(s.getObject(3)),2)+" | Profit: "+FormatNumber(gcBusNum(s.getObject(6)),2)+" ("+FormatNumber(gcBusNum(s.getObject(8)),1)+"%)");}
+
+  @SimpleFunction(description="Creates or updates the catalog item currently shown in the Screen1 Business editor.")
+  public String BusinessCatalogSaveFromScreen(){java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();String id=gcProjectGetText(m,"LBL_BUS_CATALOG_ID");String rid=BusinessCatalogSave(id,gcProjectGetText(m,"TB_BUS_CAT_CATEGORY"),gcProjectGetText(m,"TB_BUS_CAT_NAME"),gcProjectGetText(m,"TB_BUS_CAT_UNIT"),gcBusNum(gcProjectGetText(m,"TB_BUS_CAT_BUY")),gcBusNum(gcProjectGetText(m,"TB_BUS_CAT_SELL")),gcProjectGetText(m,"TB_BUS_CAT_SUPPLIER"),gcBusNum(gcProjectGetText(m,"TB_BUS_CAT_TAX")));gcProjectSetText(m,"LBL_BUS_CATALOG_ID",rid);BusinessRefreshScreen();return rid;}
+
+  @SimpleFunction(description="Loads a selected catalog ListView row into the Business editor.")
+  public boolean BusinessCatalogSelectFromScreen(double selectionIndex){int i=(int)Math.round(selectionIndex)-1;java.util.ArrayList<Object> rows=gcBusRows(GC_BUS_CATALOG);if(i<0||i>=rows.size())return false;java.util.ArrayList<Object> r=mdList(rows.get(i));if(r.size()<9)return false;java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();String[] names={"LBL_BUS_CATALOG_ID","TB_BUS_CAT_CATEGORY","TB_BUS_CAT_NAME","TB_BUS_CAT_UNIT","TB_BUS_CAT_BUY","TB_BUS_CAT_SELL","TB_BUS_CAT_SUPPLIER","TB_BUS_CAT_TAX"};for(int n=0;n<names.length;n++)gcProjectSetText(m,names[n],gcBusS(r.get(n)));return true;}
+
+  @SimpleFunction(description="Deletes the catalog item currently loaded in the Business editor.")
+  public boolean BusinessCatalogDeleteFromScreen(){java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();boolean ok=BusinessCatalogDelete(gcProjectGetText(m,"LBL_BUS_CATALOG_ID"));if(ok){for(String n:new String[]{"LBL_BUS_CATALOG_ID","TB_BUS_CAT_CATEGORY","TB_BUS_CAT_NAME","TB_BUS_CAT_UNIT","TB_BUS_CAT_BUY","TB_BUS_CAT_SELL","TB_BUS_CAT_SUPPLIER","TB_BUS_CAT_TAX"})gcProjectSetText(m,n,"");BusinessRefreshScreen();}return ok;}
+
+  @SimpleFunction(description="Creates or updates a PLAN/ACTUAL cost row from the Screen1 Business editor.")
+  public String BusinessCostSaveFromScreen(){java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();String mode=gcProjectGetSelectionIndex(m,"SP_BUS_COST_MODE")==2?"ACTUAL":"PLAN";String rid=BusinessCostSave(gcProjectGetText(m,"LBL_BUS_COST_ID"),gcBusActiveProject(),mode,gcProjectGetText(m,"TB_BUS_COST_CATEGORY"),gcProjectGetText(m,"TB_BUS_COST_DESC"),gcBusNum(gcProjectGetText(m,"TB_BUS_COST_QTY")),gcBusNum(gcProjectGetText(m,"TB_BUS_COST_UNIT")),"");gcProjectSetText(m,"LBL_BUS_COST_ID",rid);BusinessRefreshScreen();return rid;}
+
+  @SimpleFunction(description="Loads a selected project cost row into the Business editor.")
+  public boolean BusinessCostSelectFromScreen(double selectionIndex){int i=(int)Math.round(selectionIndex)-1;java.util.ArrayList<Object> rows=mdList(BusinessCosts(gcBusActiveProject(),""));if(i<0||i>=rows.size())return false;java.util.ArrayList<Object> r=mdList(rows.get(i));if(r.size()<11)return false;java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();gcProjectSetText(m,"LBL_BUS_COST_ID",gcBusS(r.get(0)));gcProjectSetSelectionIndex(m,"SP_BUS_COST_MODE","ACTUAL".equals(gcBusS(r.get(2)))?2:1);gcProjectSetText(m,"TB_BUS_COST_CATEGORY",gcBusS(r.get(3)));gcProjectSetText(m,"TB_BUS_COST_DESC",gcBusS(r.get(4)));gcProjectSetText(m,"TB_BUS_COST_QTY",gcBusS(r.get(5)));gcProjectSetText(m,"TB_BUS_COST_UNIT",gcBusS(r.get(6)));return true;}
+
+  @SimpleFunction(description="Deletes the currently loaded project cost row.")
+  public boolean BusinessCostDeleteFromScreen(){java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();boolean ok=BusinessCostDelete(gcProjectGetText(m,"LBL_BUS_COST_ID"));if(ok){for(String n:new String[]{"LBL_BUS_COST_ID","TB_BUS_COST_CATEGORY","TB_BUS_COST_DESC","TB_BUS_COST_QTY","TB_BUS_COST_UNIT"})gcProjectSetText(m,n,"");BusinessRefreshScreen();}return ok;}
+
+  @SimpleFunction(description="Starts work timing from the Screen1 Business controls.")
+  public boolean BusinessTimerStartFromScreen(){java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();return BusinessTimerStart(gcBusActiveProject(),gcBusSelection(m,"SP_BUS_TIME_PHASE"),gcBusNum(gcProjectGetText(m,"TB_BUS_HOURLY_RATE")),gcProjectGetText(m,"TB_BUS_TIME_NOTE"));}
+
+  @SimpleFunction(description="Stops the active timer and refreshes the Business page.")
+  public double BusinessTimerStopFromScreen(){double x=BusinessTimerStop();BusinessRefreshScreen();return x;}
+
+  @SimpleFunction(description="Adds manually entered work time from the Screen1 Business controls.")
+  public String BusinessTimeAddFromScreen(){java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();String id=BusinessTimeAdd(gcBusActiveProject(),gcBusSelection(m,"SP_BUS_TIME_PHASE"),gcBusNum(gcProjectGetText(m,"TB_BUS_TIME_MINUTES")),gcBusNum(gcProjectGetText(m,"TB_BUS_HOURLY_RATE")),gcProjectGetText(m,"TB_BUS_TIME_NOTE"));BusinessRefreshScreen();return id;}
+
+  @SimpleFunction(description="Applies the selected project template from Screen1 and refreshes the Business page.")
+  public double BusinessTemplateApplyFromScreen(){java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();String[] c={"GATE","FENCE","SERVICE","CUSTOM"};int i=gcProjectGetSelectionIndex(m,"SP_BUS_TEMPLATE");double n=BusinessApplyTemplate(gcBusActiveProject(),c[Math.max(1,Math.min(4,i))-1]);BusinessRefreshScreen();return n;}
