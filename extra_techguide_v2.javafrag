@@ -105,6 +105,21 @@
         || n.contains("CONTROLLED REPEATABLE WAY USING A SUITABLE METHOD");
   }
 
+  private boolean tgV2GenericItem(String s) {
+    String n=tgAsciiNorm(s);
+    return tgV2Generic(s)||n.contains("AZONOSITSD A FELADATOT AZ ANYAGOT ES A SZUKSEGES MERETEKET")
+      ||n.contains("ELLENORIZD AZ ESZKOZ TARTOZEK VAGY ANYAG ALLAPOTAT")
+      ||n.contains("VEGEZD A MUVELETET FOKOZATOSAN")||n.contains("A VEGEn ELLENORIZD A MUKODEST")
+      ||n.contains("IDENTIFY THE TASK MATERIAL AND REQUIRED DIMENSIONS")
+      ||n.contains("PERFORM THE OPERATION PROGRESSIVELY")
+      ||n.contains("CHOOSING THE WRONG SIZE OR ACCESSORY");
+  }
+
+  private YailList tgV2UsefulList(YailList in){java.util.ArrayList<Object>out=new java.util.ArrayList<Object>();if(in!=null)for(int i=0;i<in.size();i++){String s=mdString(in.getObject(i)).trim();if(s.length()>0&&!tgV2GenericItem(s))out.add(s);}return YailList.makeList(out);}
+
+  private String tgV2Tables(Object record,int lang){java.util.ArrayList<Object>tables=mdList(mdGet(record,"tables",YailList.makeEmptyList()));StringBuilder out=new StringBuilder();for(Object t:tables){String title=tgV2Text(t,"title",lang);java.util.ArrayList<Object>headers=mdList(mdGet(t,"headers",YailList.makeEmptyList()));java.util.ArrayList<Object>rows=mdList(mdGet(t,"rows",YailList.makeEmptyList()));if(out.length()>0)out.append("\n\n");if(title.length()>0)out.append(title).append("\n");if(!headers.isEmpty())out.append(tgV2JoinRow(headers)).append("\n");for(Object row:rows)out.append(tgV2JoinRow(mdList(row))).append("\n");String note=tgV2Text(t,"note",lang);if(note.length()>0)out.append(note);}return out.toString().trim();}
+  private String tgV2JoinRow(java.util.ArrayList<Object>row){StringBuilder s=new StringBuilder();for(Object cell:row){if(s.length()>0)s.append(" | ");s.append(mdString(cell));}return s.toString();}
+
   private String tgV2JoinBullets(YailList l) {
     StringBuilder sb=new StringBuilder(); if(l==null)return ""; for(int i=0;i<l.size();i++){String s=mdString(l.getObject(i)).trim(); if(s.length()==0)continue; if(sb.length()>0)sb.append("\n"); sb.append("• ").append(s);} return sb.toString();
   }
@@ -132,11 +147,11 @@
     tgV2SetText(map,"LBL_TG_ArticleUse",use); tgV2Section(map,"VA_TG_ArticleUse",use.length()>0);
     YailList when=tgV2List(record,"when_to_use",lang); tgV2SetElements(map,"LV_TG_ArticleWhen",when); tgV2Section(map,"VA_TG_ArticleWhen",when.size()>0);
     YailList not=tgV2List(record,"when_not_to_use",lang); tgV2SetElements(map,"LV_TG_ArticleWhenNot",not); tgV2Section(map,"VA_TG_ArticleWhenNot",not.size()>0);
-    String steps=tgV2Steps(record,lang); Object stepView=map.get("LV_TG_ArticleSteps"); if(stepView!=null)gcSetProperty(stepView,"Elements",steps.length()==0?YailList.makeEmptyList():YailList.makeList(java.util.Arrays.asList(steps.split("\\n\\n")))); tgV2Section(map,"VA_TG_ArticleSteps",steps.length()>0);
-    YailList mistakes=tgV2List(record,"common_mistakes",lang); tgV2SetElements(map,"LV_TG_ArticleMistakes",mistakes); tgV2Section(map,"VA_TG_ArticleMistakes",mistakes.size()>0);
+    String steps=tgV2Steps(record,lang); if(tgV2GenericItem(steps))steps=""; String tables=tgV2Tables(record,lang);if(tables.length()>0)steps=(steps.length()>0?steps+"\n\n":"")+tables; Object stepView=map.get("LV_TG_ArticleSteps"); if(stepView!=null)gcSetProperty(stepView,"Elements",steps.length()==0?YailList.makeEmptyList():YailList.makeList(java.util.Arrays.asList(steps.split("\\n\\n")))); tgV2Section(map,"VA_TG_ArticleSteps",steps.length()>0);
+    YailList mistakes=tgV2UsefulList(tgV2List(record,"common_mistakes",lang)); tgV2SetElements(map,"LV_TG_ArticleMistakes",mistakes); tgV2Section(map,"VA_TG_ArticleMistakes",mistakes.size()>0);
     String safety=tgV2Text(record,"safety_text",lang); tgV2SetText(map,"LBL_TG_ArticleSafety",safety); tgV2Section(map,"VA_TG_ArticleSafety",safety.length()>0);
     String beginner=tgV2Text(record,"beginner_text",lang); if(tgV2Generic(beginner))beginner=""; tgV2SetText(map,"LBL_TG_ArticleBeginner",beginner); tgV2Section(map,"VA_TG_ArticleBeginner",beginner.length()>0);
     String advanced=tgV2Text(record,"advanced_text",lang); tgV2SetText(map,"LBL_TG_ArticleAdvanced",advanced); tgV2Section(map,"VA_TG_ArticleAdvanced",advanced.length()>0);
-    YailList tips=tgV2List(record,"pro_tips",lang); tgV2SetElements(map,"LV_TG_ArticleTips",tips); tgV2Section(map,"VA_TG_ArticleTips",tips.size()>0);
+    YailList tips=tgV2UsefulList(tgV2List(record,"pro_tips",lang)); tgV2SetElements(map,"LV_TG_ArticleTips",tips); tgV2Section(map,"VA_TG_ArticleTips",tips.size()>0);
     String source=tgV2Text(record,"source_display",lang); if(source.length()==0){String note=mdString(mdGet(record,"source_note",""));String url=mdString(mdGet(record,"source_url",""));String date=mdString(mdGet(record,"verified_date",""));source=(note.length()>0?note:"")+(date.length()>0?" · "+date:"")+(url.length()>0?"\n"+url:"");} tgV2SetText(map,"LBL_TG_ArticleSource",source); tgV2Section(map,"VA_TG_ArticleSource",source.trim().length()>0);
   }
