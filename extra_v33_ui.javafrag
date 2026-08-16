@@ -27,14 +27,26 @@
 
   private boolean gcV33HeadingName(String upperName) {
     if (upperName == null) return false;
-    return upperName.contains("TITLE") || upperName.contains("PAGETITLE")
-        || upperName.contains("HEADERTITLE") || upperName.contains("SECTION")
+    return upperName.endsWith("_TITLE") || upperName.contains("PAGETITLE")
+        || upperName.contains("HEADERTITLE") || upperName.endsWith("_CIM")
         || upperName.endsWith("_CIM") || upperName.contains("_CIM_");
   }
 
   private boolean gcV33StatusName(String upperName) {
-    return upperName != null && (upperName.contains("STATUS") || upperName.contains("DATABASE")
-        || upperName.contains("PROJECT") || upperName.contains("PROFILE"));
+    return upperName != null && (upperName.endsWith("STATUS") || upperName.contains("_STATUS_")
+        || upperName.contains("DATABASESTATUS"));
+  }
+
+  private String gcV34ButtonImage(String theme) {
+    String c=theme==null?"default":theme.trim().toLowerCase(java.util.Locale.ROOT);
+    if("marka1".equals(c))return "btn_makita.png";
+    if("marka2".equals(c))return "btn_marka2.png";
+    if("marka3".equals(c))return "btn_marka3.png";
+    return "btn_alapd.jpg";
+  }
+
+  private int gcV34NormalText(String theme) {
+    return "marka2".equals(theme==null?"":theme.trim().toLowerCase(java.util.Locale.ROOT)) ? 0xFFFFFFFF : 0xFF000000;
   }
 
   @SimpleFunction(description = "Applies one of the four proven GateCraft themes to modern GateCraft screens so buttons, pickers, labels and headers remain visibly contrasted.")
@@ -42,6 +54,8 @@
     if (!gcV33ModernScreen()) return;
     String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");
     int[] p = gcV33Palette(theme);
+    String buttonImage=gcV34ButtonImage(theme);
+    int normalText=gcV34NormalText(theme);
     java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
     for (java.util.Map.Entry<String,Object> e : map.entrySet()) {
       String name = e.getKey() == null ? "" : e.getKey().toUpperCase(java.util.Locale.ROOT);
@@ -53,9 +67,8 @@
       } else if (c instanceof com.google.appinventor.components.runtime.Button
           || c instanceof com.google.appinventor.components.runtime.FilePicker
           || c instanceof com.google.appinventor.components.runtime.ListPicker) {
-        gcSetProperty(c, "Image", "");
-        gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[2]));
-        gcSetProperty(c, "TextColor", Integer.valueOf(p[6]));
+        gcSetProperty(c, "Image", buttonImage);
+        gcSetProperty(c, "TextColor", Integer.valueOf(normalText));
       } else if (c instanceof com.google.appinventor.components.runtime.Spinner) {
         gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[2]));
         gcSetProperty(c, "TextColor", Integer.valueOf(p[6]));
@@ -71,10 +84,11 @@
           gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[1]));
           gcSetProperty(c, "TextColor", Integer.valueOf(p[4]));
         } else if (gcV33StatusName(name)) {
-          gcSetProperty(c, "BackgroundColor", Integer.valueOf(p[5]));
-          gcSetProperty(c, "TextColor", Integer.valueOf(p[3]));
+          gcSetProperty(c, "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+          gcSetProperty(c, "TextColor", Integer.valueOf(normalText));
         } else {
-          gcSetProperty(c, "TextColor", Integer.valueOf(p[3]));
+          gcSetProperty(c, "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+          gcSetProperty(c, "TextColor", Integer.valueOf(normalText));
         }
       } else if (c instanceof com.google.appinventor.components.runtime.CheckBox
           || c instanceof com.google.appinventor.components.runtime.Switch) {
@@ -93,7 +107,7 @@
     }
   }
 
-  @SimpleFunction(description = "Configures Screen1 theme and layout selectors for the four supported themes and four density layouts.")
+  @SimpleFunction(description = "Configures Screen1 selectors for the four supported themes. Retired layout controls are hidden when an older project still contains them.")
   public void PlatformConfigureFourThemeSelectors() {
     java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
     Object lp = map.get("temavalaszto");
@@ -102,17 +116,18 @@
     Object profileLayout = map.get("SP_PROFILE_LAYOUT");
     if (lp != null) gcSetProperty(lp, "ElementsFromString", "Standard,Ocean,Forge,Industrial");
     if (sp != null) gcSetProperty(sp, "ElementsFromString", "Standard,Ocean,Forge,Industrial");
-    if (layout != null) gcSetProperty(layout, "ElementsFromString", "Classic,Compact,Touch,Dense");
-    if (profileLayout != null) gcSetProperty(profileLayout, "ElementsFromString", "Classic,Compact,Touch,Dense");
+    Object layoutRow=map.get("HA_LAYOUT_DIRECT");
+    Object profileLayoutLabel=map.get("LBL_PROFILE_LAYOUT");
+    if(layoutRow!=null)gcSetProperty(layoutRow,"Visible",Boolean.FALSE);
+    if(layout!=null)gcSetProperty(layout,"Visible",Boolean.FALSE);
+    if(profileLayoutLabel!=null)gcSetProperty(profileLayoutLabel,"Visible",Boolean.FALSE);
+    if(profileLayout!=null)gcSetProperty(profileLayout,"Visible",Boolean.FALSE);
     String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");
     int ti = gcPlatformThemeIndex(theme);
     if (ti < 1 || ti > 4) ti = 1;
     if (lp != null) gcSetProperty(lp, "SelectionIndex", Integer.valueOf(ti));
     if (sp != null) gcSetProperty(sp, "SelectionIndex", Integer.valueOf(ti));
-    String lc = gcPlatformLayoutCode(gcPlatformTinyGet("kozos_layout", "CLASSIC"));
-    int li = "COMPACT".equals(lc) ? 2 : ("TOUCH".equals(lc) ? 3 : ("DENSE".equals(lc) ? 4 : 1));
-    if (layout != null) gcSetProperty(layout, "SelectionIndex", Integer.valueOf(li));
-    if (profileLayout != null) gcSetProperty(profileLayout, "SelectionIndex", Integer.valueOf(li));
+    gcPlatformTinyPut("kozos_layout","CLASSIC");
   }
 
   private void gcV33SetVisible(java.util.HashMap<String,Object> map, String name, boolean visible) {
@@ -174,12 +189,12 @@
           || c instanceof com.google.appinventor.components.runtime.FilePicker
           || c instanceof com.google.appinventor.components.runtime.ListPicker
           || c instanceof com.google.appinventor.components.runtime.Spinner) {
-        gcSetProperty(c,"BackgroundColor",Integer.valueOf(p[2])); gcSetProperty(c,"TextColor",Integer.valueOf(p[6]));
+        gcSetProperty(c,"Image",gcV34ButtonImage(theme)); gcSetProperty(c,"TextColor",Integer.valueOf(gcV34NormalText(theme)));
       } else if(c instanceof com.google.appinventor.components.runtime.TextBox) {
         gcSetProperty(c,"BackgroundColor",Integer.valueOf(p[5])); gcSetProperty(c,"TextColor",Integer.valueOf(p[3]));
       } else if(c instanceof com.google.appinventor.components.runtime.Label) {
         if(gcV33HeadingName(n)) { gcSetProperty(c,"BackgroundColor",Integer.valueOf(p[1])); gcSetProperty(c,"TextColor",Integer.valueOf(p[4])); }
-        else gcSetProperty(c,"TextColor",Integer.valueOf(p[3]));
+        else { gcSetProperty(c,"BackgroundColor",Integer.valueOf(0x00FFFFFF)); gcSetProperty(c,"TextColor",Integer.valueOf(gcV34NormalText(theme))); }
       } else if(c instanceof com.google.appinventor.components.runtime.VerticalArrangement
           || c instanceof com.google.appinventor.components.runtime.VerticalScrollArrangement
           || c instanceof com.google.appinventor.components.runtime.HorizontalArrangement) {
