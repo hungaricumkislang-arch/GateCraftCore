@@ -10,6 +10,9 @@
   private double spListD(YailList l,int oneBased,double fallback){ if(l==null||oneBased<1||oneBased>l.size())return fallback; return SafeNumber(l.getObject(oneBased-1),fallback); }
   private boolean spListB(YailList l,int oneBased,boolean fallback){ if(l==null||oneBased<1||oneBased>l.size())return fallback; Object o=l.getObject(oneBased-1); if(o instanceof Boolean)return ((Boolean)o).booleanValue(); String s=String.valueOf(o); return "true".equalsIgnoreCase(s)||"1".equals(s); }
 
+  @SimpleFunction(description="Returns the stable StairPro geometry mode code for a localized spinner index.")
+  public String StairGeometryMode(double selectionIndex){int i=(int)Math.round(selectionIndex);return i==2?"TARGET_RISER":i==3?"TARGET_GOING":i==4?"MAX_RUN":"COUNT";}
+
   @SimpleFunction(description="StairPro shared geometry core. Returns [valid,error,rise,width,riserCount,treadCount,riserHeight,going,run,slope,angle,comfort,minHeadroom,comfortStatus,steps].")
   public YailList StairGeometry(double totalRiseMm,double stairWidthMm,String inputMode,double riserCountInput,double targetRiserMm,double targetGoingMm,double maxRunMm,boolean separateTopTread,boolean checkHeadroom,double floorOpeningStartMm,double ceilingHeightMm,double comfortMinMm,double comfortMaxMm){
     String mode=spNorm(inputMode); int count=(int)Math.round(riserCountInput); double going=targetGoingMm;
