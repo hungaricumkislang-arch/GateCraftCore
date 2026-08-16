@@ -1,9 +1,9 @@
-# GateCraftCore AIX build workflow v33 - platform + backup + UI/search/project layer
+# GateCraftCore AIX build workflow v34 - platform + project + business layer
 name: Build GateCraftCore AIX
 
 on:
   push:
-    branches: [ main, gatecraft-backup-v32 ]
+    branches: [ main, gatecraft-backup-v32, gatecraft-business-v34 ]
   workflow_dispatch:
 
 permissions:
@@ -39,7 +39,7 @@ jobs:
           tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
           find buildenv/src -maxdepth 8 -type f -print
 
-      - name: Inject GateCraftCore v3.3 helpers
+      - name: Inject GateCraftCore v3.4 helpers
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -48,8 +48,8 @@ jobs:
               raise SystemExit('Expected exactly one GateCraftCore.java, found %d' % len(matches))
           p = matches[0]
           s = p.read_text(encoding='utf-8')
-          s = s.replace('version = 10', 'version = 33', 1)
-          s = s.replace('return "1.0.0";', 'return "3.3.0";', 1)
+          s = s.replace('version = 10', 'version = 34', 1)
+          s = s.replace('return "1.0.0";', 'return "3.4.0";', 1)
           fragments = []
           for fp in [
               'extra_methods.javafrag', 'extra_names.javafrag', 'extra_algorithms.javafrag',
@@ -61,7 +61,8 @@ jobs:
               'extra_stairpro_display.javafrag', 'extra_namedbatch.javafrag', 'extra_platform.javafrag',
               'extra_backup.javafrag', 'extra_backup_lang.javafrag', 'extra_backup_ui.javafrag',
               'extra_v33_ui.javafrag', 'extra_techguide_v2.javafrag', 'extra_projecthub.javafrag',
-              'extra_v33_runtime.javafrag', 'extra_v33_screen1_lang.javafrag']:
+              'extra_v33_runtime.javafrag', 'extra_v33_screen1_lang.javafrag',
+              'extra_business.javafrag']:
               fragments.append(Path(fp).read_text(encoding='utf-8'))
           pos = s.rfind('}')
           if pos < 0:
@@ -82,6 +83,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-v3.3-aix
+          name: GateCraftCore-v3.4-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
