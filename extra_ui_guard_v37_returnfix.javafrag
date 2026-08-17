@@ -1,0 +1,56 @@
+  // ------------------------------------------------------------------
+  // GateCraft v3.7 Screen1 return-state supplement.
+  // Keeps the proven BKY untouched. If existing Core logic returns directly
+  // to VA_UJ_FO, restore the bottom panel as well.
+  // ------------------------------------------------------------------
+  private android.view.ViewTreeObserver.OnGlobalLayoutListener gcV37ReturnFixListener;
+  private boolean gcV37ReturnFixInstalled = false;
+
+  {
+    try {
+      final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+      h.postDelayed(new java.lang.Runnable() {
+        private int tries = 0;
+        @Override public void run() {
+          try {
+            if (gcV37InstallReturnFix()) return;
+          } catch (Throwable ignored) { }
+          tries++;
+          if (tries < 20) h.postDelayed(this, 250L);
+        }
+      }, 350L);
+    } catch (Throwable ignored) { }
+  }
+
+  private boolean gcV37InstallReturnFix() {
+    if (gcV37ReturnFixInstalled) return true;
+    if (form == null || !"Screen1".equals(form.getClass().getSimpleName())) {
+      gcV37ReturnFixInstalled = true;
+      return true;
+    }
+    android.app.Activity activity = (android.app.Activity) form;
+    final android.view.View root = activity.getWindow() == null ? null : activity.getWindow().getDecorView();
+    if (root == null) return false;
+    android.view.ViewTreeObserver obs = root.getViewTreeObserver();
+    if (obs == null || !obs.isAlive()) return false;
+    gcV37ReturnFixListener = new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+      @Override public void onGlobalLayout() {
+        try { gcV37EnsureHomeBottomPanel(); } catch (Throwable ignored) { }
+      }
+    };
+    obs.addOnGlobalLayoutListener(gcV37ReturnFixListener);
+    gcV37ReturnFixInstalled = true;
+    gcV37EnsureHomeBottomPanel();
+    return true;
+  }
+
+  private void gcV37EnsureHomeBottomPanel() {
+    if (form == null || !"Screen1".equals(form.getClass().getSimpleName())) return;
+    java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+    if (!gcV37Visible(map,"VA_UJ_FO")) return;
+    boolean overlay = gcV37Visible(map,"VA_PROFILE") || gcV37Visible(map,"VA_BACKUP")
+        || gcV37Visible(map,"VA_PROJECT_HUB") || gcV37Visible(map,"VA_BUSINESS")
+        || gcV37Visible(map,"VA_GATECRAFT_CENTER") || gcV37Visible(map,"VA_MODULE_CLEAR")
+        || gcV37Visible(map,"beallitasvertikal");
+    if (!overlay) gcV37SetVisible(map,"VA_UJ_ALSOPANEL",true);
+  }
