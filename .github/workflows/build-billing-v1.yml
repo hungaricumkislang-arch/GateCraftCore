@@ -29,7 +29,7 @@ jobs:
       - name: Install App Inventor build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ant unzip
+          sudo apt-get install -y ant unzip zip
 
       - name: Clone official MIT App Inventor extension template
         run: |
@@ -95,6 +95,16 @@ jobs:
           done
           echo "AIX dependency jars:"
           ls -lh buildbilling/lib/deps
+
+      - name: Remove desktop Java module metadata unsupported by Android dx
+        run: |
+          set -euxo pipefail
+          for j in buildbilling/lib/deps/*.jar; do
+            zip -q -d "$j" 'META-INF/versions/*' 'module-info.class' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.DSA' 2>/dev/null || true
+          done
+          if grep -RIl --include='*.jar' 'module-info' buildbilling/lib/deps >/dev/null 2>&1; then
+            true
+          fi
 
       - name: Inject @UsesLibraries dependency list
         run: |
