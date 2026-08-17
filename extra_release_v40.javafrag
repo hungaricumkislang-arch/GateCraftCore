@@ -1,0 +1,44 @@
+  // GateCraft v4.0 targeted resource release helper.
+  // Called only immediately before a physical modern screen is closed.
+  // No calculation, navigation, theme, or persistence logic is changed here.
+  @SimpleFunction(description = "Releases transient GateCraftCore/UI resources immediately before closing a heavy screen.")
+  public void ReleaseScreenResources() {
+    // Core-owned decompressed asset caches. They are lazy-loaded again on the next screen instance.
+    try { if (gcLang6Cache != null) gcLang6Cache.clear(); } catch (Throwable ignored) { }
+    gcLang6Cache = null;
+    try { if (gcLangPlanCache != null) gcLangPlanCache.clear(); } catch (Throwable ignored) { }
+    gcLangPlanCache = null;
+    try { if (gcNamedBatchCache != null) gcNamedBatchCache.clear(); } catch (Throwable ignored) { }
+    gcNamedBatchCache = null;
+    try { if (gcStaticListCache != null) gcStaticListCache.clear(); } catch (Throwable ignored) { }
+    gcStaticListCache = null;
+    try { if (gcTextOpsCache != null) gcTextOpsCache.clear(); } catch (Throwable ignored) { }
+    gcTextOpsCache = null;
+
+    // Native Center caches, if this helper is ever called from that screen.
+    try { if (gcEngLastMetrics != null) gcEngLastMetrics.clear(); } catch (Throwable ignored) { }
+    gcEngA = null;
+    gcEngB = null;
+    gcCenterData = null;
+
+    // Release the large UI-backed references that are safe to rebuild on next Initialize.
+    java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+    for (java.util.Map.Entry<String,Object> e : map.entrySet()) {
+      Object c = e.getValue();
+      if (c == null) continue;
+      try {
+        if (c instanceof com.google.appinventor.components.runtime.Clock) {
+          gcSetProperty(c, "TimerEnabled", Boolean.FALSE);
+        } else if (c instanceof com.google.appinventor.components.runtime.ListView) {
+          gcSetProperty(c, "Elements", YailList.makeEmptyList());
+        } else if (c instanceof com.google.appinventor.components.runtime.Image) {
+          gcSetProperty(c, "Picture", "");
+        } else if (c instanceof com.google.appinventor.components.runtime.Button) {
+          // The screen is closing immediately after this call. Dropping the image reference here
+          // releases themed button drawables without changing the rounded design while the screen is used.
+          gcSetProperty(c, "Image", "");
+        }
+      } catch (Throwable ignored) { }
+    }
+    try { gcSetProperty(form, "BackgroundImage", ""); } catch (Throwable ignored) { }
+  }
