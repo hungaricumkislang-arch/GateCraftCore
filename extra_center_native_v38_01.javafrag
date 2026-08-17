@@ -28,17 +28,18 @@
 
   private void gcCApplyTheme(java.util.HashMap<String,Object> m){
     String t=gcCTheme(); boolean forge="marka2".equals(t); int normal=forge?0xFFFFFFFF:0xFF000000; int hbg=forge?0xFF181818:0xFFFFFFFF; int htxt=forge?0xFFFFFFFF:0xFF000000;
+    try{gcSetProperty(form,"BackgroundImage",gcCFormImage(t));}catch(Throwable ignored){}
     gcCSet(m,"Screen_EngineeringLab","BackgroundImage",gcCFormImage(t));
     for(java.util.Map.Entry<String,Object> e:m.entrySet()){String n=e.getKey()==null?"":e.getKey();Object c=e.getValue();if(c==null)continue;String u=n.toUpperCase(java.util.Locale.ROOT);
       if(c instanceof com.google.appinventor.components.runtime.Button || c instanceof com.google.appinventor.components.runtime.FilePicker || c instanceof com.google.appinventor.components.runtime.ListPicker){
-        boolean head="BTN_GC_BACK".equals(u); gcCSet(m,n,"Image",head?gcV35BackImage(t):gcV34ButtonImage(t)); gcCSet(m,n,"TextColor",Integer.valueOf(head?htxt:gcV35ButtonText(t))); gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
-      } else if(c instanceof com.google.appinventor.components.runtime.Label){gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));gcCSet(m,n,"TextColor",Integer.valueOf((u.contains("TAKARO")||u.equals("LBL_GC_PAGETITLE"))?htxt:normal));
+        boolean head="BTN_GC_BACK".equals(u); gcCSet(m,n,"Image",head?gcV35BackImage(t):gcV34ButtonImage(t)); gcCSet(m,n,"TextColor",Integer.valueOf(head?normal:gcV35ButtonText(t))); gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
+      } else if(c instanceof com.google.appinventor.components.runtime.Label){gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));gcCSet(m,n,"TextColor",Integer.valueOf(u.contains("TAKARO")?htxt:normal));
       } else if(c instanceof com.google.appinventor.components.runtime.TextBox){gcCSet(m,n,"BackgroundColor",Integer.valueOf(0xFFFFFFFF));gcCSet(m,n,"TextColor",Integer.valueOf(0xFF000000));gcCSet(m,n,"HintColor",Integer.valueOf(0xFF000000));
       } else if(c instanceof com.google.appinventor.components.runtime.Spinner){gcCSet(m,n,"TextColor",Integer.valueOf(0xFF000000));
       } else if(c instanceof com.google.appinventor.components.runtime.ListView){gcCSet(m,n,"BackgroundColor",Integer.valueOf(0xFFFFFFFF));gcCSet(m,n,"TextColor",Integer.valueOf(0xFF000000));gcCSet(m,n,"TextColorDetail",Integer.valueOf(0xFF000000));
       } else if(c instanceof com.google.appinventor.components.runtime.CheckBox || c instanceof com.google.appinventor.components.runtime.Switch){gcCSet(m,n,"TextColor",Integer.valueOf(normal));
       } else if(c instanceof com.google.appinventor.components.runtime.HorizontalArrangement || c instanceof com.google.appinventor.components.runtime.VerticalArrangement || c instanceof com.google.appinventor.components.runtime.VerticalScrollArrangement){
-        if("HA_GC_HEADER".equals(u)||"VA_GC_TAKARO".equals(u))gcCSet(m,n,"BackgroundColor",Integer.valueOf(hbg)); else gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
+        if("VA_GC_TAKARO".equals(u))gcCSet(m,n,"BackgroundColor",Integer.valueOf(hbg)); else gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
       }
     }
     gcCSet(m,"BTN_GC_Back","Width",Integer.valueOf(-1015));gcCTextSet(m,"BTN_GC_Back","‹");
