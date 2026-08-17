@@ -1,0 +1,224 @@
+  // ------------------------------------------------------------------
+  // GateCraft v4.1 targeted full-audit fixes (Screen3/CUT intentionally excluded)
+  // ------------------------------------------------------------------
+  private int gcV41EngATool = 0;
+  private int gcV41EngBTool = 0;
+
+  private String gcV41Tr(String key, int lang) {
+    int l = (lang < 1 || lang > 12) ? 2 : lang;
+    String[][] rows = new String[][]{
+      {"INVALID","Érvénytelen vagy hiányzó bemenet.","Invalid or missing input.","Ungültige oder fehlende Eingabe.","Entrada no válida o ausente.","Entrée invalide ou manquante.","输入无效或缺失。","Input non valido o mancante.","Entrada inválida ou em falta.","Nieprawidłowe lub brakujące dane.","Ongeldige of ontbrekende invoer.","Date invalide sau lipsă.","Неверные или отсутствующие данные."},
+      {"POSITIVE","Az értéknek 0-nál nagyobbnak kell lennie.","Value must be greater than zero.","Der Wert muss größer als null sein.","El valor debe ser mayor que cero.","La valeur doit être supérieure à zéro.","该值必须大于零。","Il valore deve essere maggiore di zero.","O valor deve ser superior a zero.","Wartość musi być większa od zera.","De waarde moet groter zijn dan nul.","Valoarea trebuie să fie mai mare decât zero.","Значение должно быть больше нуля."},
+      {"OVERLAP","A ráfedésnek kisebbnek kell lennie a lemez szélességénél.","Overlap must be smaller than sheet width.","Die Überdeckung muss kleiner als die Blechbreite sein.","El solape debe ser menor que el ancho de la chapa.","Le recouvrement doit être inférieur à la largeur de tôle.","搭接宽度必须小于板宽。","La sovrapposizione deve essere minore della larghezza lamiera.","A sobreposição deve ser menor que a largura da chapa.","Zakład musi być mniejszy niż szerokość arkusza.","De overlap moet kleiner zijn dan de plaatbreedte.","Suprapunerea trebuie să fie mai mică decât lățimea tablei.","Нахлёст должен быть меньше ширины листа."},
+      {"SAME_TOOL","Az A/B összehasonlításhoz ugyanazt a mérnöki eszközt használd.","Use the same engineering tool for A/B comparison.","Für den A/B-Vergleich dasselbe Werkzeug verwenden.","Usa la misma herramienta para comparar A/B.","Utilisez le même outil pour comparer A/B.","A/B 比较必须使用同一个工程工具。","Usa lo stesso strumento per il confronto A/B.","Use a mesma ferramenta na comparação A/B.","Do porównania A/B użyj tego samego narzędzia.","Gebruik hetzelfde hulpmiddel voor A/B.","Folosește același instrument pentru comparația A/B.","Для сравнения A/B используйте один и тот же инструмент."},
+      {"VERT_HINGE","Függőleges teher / zsanér","Vertical load / hinge","Vertikallast / Band","Carga vertical / bisagra","Charge verticale / charnière","每个铰链的垂直载荷","Carico verticale / cerniera","Carga vertical / dobradiça","Obciążenie pionowe / zawias","Verticale last / scharnier","Sarcină verticală / balama","Вертикальная нагрузка / петля"},
+      {"MOMENT_REACTION","Nyomatéki zsanérreakció","Moment-couple hinge reaction","Bandreaktion aus Momentenpaar","Reacción de bisagra por par","Réaction de charnière par couple","力矩偶铰链反力","Reazione cerniera da coppia","Reação da dobradiça por binário","Reakcja zawiasu od pary sił","Scharnierreactie door momentkoppel","Reacție balama din cuplu","Реакция петли от пары сил"},
+      {"BUDGET","Költségkeret","Budget","Budget","Presupuesto","Budget","预算","Budget","Orçamento","Budżet","Budget","Buget","Бюджет"},
+      {"UNIT_PRICE","Egységár","Unit price","Stückpreis","Precio unitario","Prix unitaire","单价","Prezzo unitario","Preço unitário","Cena jednostkowa","Eenheidsprijs","Preț unitar","Цена за единицу"},
+      {"COST","Önköltség","Cost","Kosten","Coste","Coût","成本","Costo","Custo","Koszt","Kosten","Cost","Себестоимость"},
+      {"TARGET_MARGIN","Célmargin [%]","Target margin [%]","Zielmarge [%]","Margen objetivo [%]","Marge cible [%]","目标利润率 [%]","Margine obiettivo [%]","Margem alvo [%]","Marża docelowa [%]","Doelmarge [%]","Marjă țintă [%]","Целевая маржа [%]"},
+      {"MASS","Tömeg [kg]","Mass [kg]","Masse [kg]","Masa [kg]","Masse [kg]","质量 [kg]","Massa [kg]","Massa [kg]","Masa [kg]","Massa [kg]","Masă [kg]","Масса [кг]"},
+      {"HINGES","Zsanérok [db]","Hinges [pcs]","Bänder [Stk.]","Bisagras [ud.]","Charnières [pcs]","铰链 [个]","Cerniere [pz]","Dobradiças [un.]","Zawiasy [szt.]","Scharnieren [st.]","Balamale [buc.]","Петли [шт.]"},
+      {"HINGE_SPACING","Zsanértáv [mm]","Hinge spacing [mm]","Bandabstand [mm]","Distancia bisagras [mm]","Entraxe charnières [mm]","铰链间距 [mm]","Interasse cerniere [mm]","Distância dobradiças [mm]","Rozstaw zawiasów [mm]","Scharnierafstand [mm]","Distanță balamale [mm]","Расстояние между петлями [мм]"},
+      {"POST_SPACING","Oszloptáv [m]","Post spacing [m]","Pfostenabstand [m]","Separación postes [m]","Entraxe poteaux [m]","立柱间距 [m]","Interasse pali [m]","Espaçamento postes [m]","Rozstaw słupków [m]","Paalafstand [m]","Distanță stâlpi [m]","Шаг стоек [м]"},
+      {"START_FACTOR","Indítási tényező","Start factor","Anfahrfaktor","Factor de arranque","Facteur de démarrage","启动系数","Fattore di avvio","Fator de arranque","Współczynnik rozruchu","Startfactor","Factor de pornire","Коэффициент пуска"},
+      {"ROLLERS","Görgők [db]","Rollers [pcs]","Rollen [Stk.]","Rodillos [ud.]","Galets [pcs]","滚轮 [个]","Rulli [pz]","Roletes [un.]","Rolki [szt.]","Rollen [st.]","Role [buc.]","Ролики [шт.]"},
+      {"OPENING","Nyílás [mm]","Opening [mm]","Öffnung [mm]","Hueco [mm]","Ouverture [mm]","开口 [mm]","Apertura [mm]","Vão [mm]","Światło [mm]","Opening [mm]","Deschidere [mm]","Проём [мм]"},
+      {"ROLLER_SPACING","Görgősor-táv [mm]","Roller spacing [mm]","Rollenabstand [mm]","Distancia rodillos [mm]","Entraxe galets [mm]","滚轮间距 [mm]","Interasse rulli [mm]","Distância roletes [mm]","Rozstaw rolek [mm]","Rolafstand [mm]","Distanță role [mm]","Расстояние роликов [мм]"},
+      {"TYPE_GATE","Típus [1=toló 2=szárnyas]","Type [1=sliding 2=swing]","Typ [1=Schiebe 2=Dreh]","Tipo [1=corredera 2=batiente]","Type [1=coulissant 2=battant]","类型 [1=平移 2=平开]","Tipo [1=scorrevole 2=battente]","Tipo [1=correr 2=batente]","Typ [1=przesuwna 2=skrzydłowa]","Type [1=schuif 2=draai]","Tip [1=culisantă 2=batantă]","Тип [1=откатные 2=распашные]"},
+      {"COUNT","Darabszám [db]","Count [pcs]","Anzahl [Stk.]","Cantidad [ud.]","Quantité [pcs]","数量 [个]","Quantità [pz]","Quantidade [un.]","Liczba [szt.]","Aantal [st.]","Cantitate [buc.]","Количество [шт.]"},
+      {"RESERVE","Ráhagyás [%]","Reserve [%]","Reserve [%]","Reserva [%]","Réserve [%]","余量 [%]","Riserva [%]","Reserva [%]","Zapas [%]","Reserve [%]","Rezervă [%]","Запас [%]"},
+      {"AREA","Terület [m²]","Area [m²]","Fläche [m²]","Área [m²]","Surface [m²]","面积 [m²]","Area [m²]","Área [m²]","Powierzchnia [m²]","Oppervlak [m²]","Suprafață [m²]","Площадь [м²]"},
+      {"EXCAVATION","Kitermelés [cm]","Excavation [cm]","Aushub [cm]","Excavación [cm]","Décaissement [cm]","开挖 [cm]","Scavo [cm]","Escavação [cm]","Wykop [cm]","Uitgraving [cm]","Excavație [cm]","Выемка [см]"},
+      {"SUBBASE","Alapréteg [cm]","Subbase [cm]","Tragschicht [cm]","Subbase [cm]","Couche de base [cm]","基层 [cm]","Sottofondo [cm]","Sub-base [cm]","Podbudowa [cm]","Fundering [cm]","Strat suport [cm]","Основание [см]"},
+      {"BEDDING","Ágyazó [cm]","Bedding [cm]","Bettung [cm]","Lecho [cm]","Lit de pose [cm]","垫层 [cm]","Allettamento [cm]","Cama [cm]","Podsypka [cm]","Bedding [cm]","Pat [cm]","Подсыпка [см]"},
+      {"EDGE","Szegély [m]","Edge [m]","Rand [m]","Borde [m]","Bordure [m]","边缘 [m]","Bordo [m]","Borda [m]","Obrzeże [m]","Rand [m]","Bordură [m]","Бордюр [м]"},
+      {"PROCESS","Eljárás","Process","Verfahren","Proceso","Procédé","工艺","Processo","Processo","Proces","Proces","Procedeu","Процесс"},
+      {"MATERIAL","Anyag","Material","Material","Material","Matériau","材料","Materiale","Material","Materiał","Materiaal","Material","Материал"},
+      {"JOINT","Kötés","Joint","Naht","Unión","Joint","接头","Giunto","Junta","Złącze","Verbinding","Îmbinare","Соединение"},
+      {"POSITION","Pozíció","Position","Position","Posición","Position","位置","Posizione","Posição","Pozycja","Positie","Poziție","Положение"},
+      {"PLANNED_COST","Tervezett költség","Planned cost","Plankosten","Coste previsto","Coût prévu","计划成本","Costo pianificato","Custo planeado","Koszt planowany","Geplande kosten","Cost planificat","Плановая стоимость"},
+      {"ACTUAL_COST","Tényleges költség","Actual cost","Istkosten","Coste real","Coût réel","实际成本","Costo effettivo","Custo real","Koszt rzeczywisty","Werkelijke kosten","Cost real","Фактическая стоимость"},
+      {"PROFIT","Profit","Profit","Gewinn","Beneficio","Bénéfice","利润","Profitto","Lucro","Zysk","Winst","Profit","Прибыль"},
+      {"LABOR_H","Munkaóra [h]","Labor [h]","Arbeit [h]","Trabajo [h]","Travail [h]","工时 [h]","Lavoro [h]","Trabalho [h]","Praca [h]","Arbeid [h]","Muncă [h]","Работа [ч]"}
+    };
+    for (String[] r : rows) if (r[0].equals(key)) return r[l];
+    return key;
+  }
+
+  @SimpleFunction(description="Shows a localized GateCraft validation warning without changing calculation values.")
+  public void ValidationAlert(String code) {
+    int lang=(int)Math.round(PlatformLanguagePreference());
+    String c=code==null?"":code.toUpperCase(java.util.Locale.ROOT);
+    String msg="OVERLAP".equals(c)?gcV41Tr("OVERLAP",lang):gcV41Tr("POSITIVE",lang);
+    try { android.widget.Toast.makeText(form, msg, android.widget.Toast.LENGTH_LONG).show(); } catch(Throwable ignored) {}
+  }
+
+  private String[] gcV41EngineeringLabels(int t, int lang) {
+    switch(t) {
+      case 1:return new String[]{gcV41Tr("BUDGET",lang),gcV41Tr("UNIT_PRICE",lang)};
+      case 2:return new String[]{"M_allow [kNm]","h [m]","v_wind [m/s]","Cd","solidity [0..1]"};
+      case 3:return new String[]{"F_limit [N]","v_wind [m/s]","Cd","solidity [0..1]"};
+      case 4:return new String[]{gcV41Tr("MASS",lang),"μ_roll","slope [%]",gcV41Tr("START_FACTOR",lang)};
+      case 5:return new String[]{gcV41Tr("COST",lang),gcV41Tr("TARGET_MARGIN",lang)};
+      case 6:return new String[]{"B [mm]","H [mm]",gcV41Tr("MASS",lang),gcV41Tr("HINGES",lang),gcV41Tr("HINGE_SPACING",lang),"v_wind [m/s]","Cd","solidity [0..1]","M_allow [kNm]"};
+      case 7:return new String[]{gcV41Tr("MASS",lang),"B [mm]","H [mm]","μ_roll","slope [%]",gcV41Tr("START_FACTOR",lang),gcV41Tr("ROLLERS",lang),"v_wind [m/s]","Cd","wind opposition [0..1]","speed [m/s]","η"};
+      case 8:return new String[]{gcV41Tr("OPENING",lang),"L_total [mm]",gcV41Tr("MASS",lang),gcV41Tr("ROLLER_SPACING",lang),"cg front [mm]","H [mm]","v_wind [m/s]","Cd","solidity [0..1]"};
+      case 9:return new String[]{gcV41Tr("TYPE_GATE",lang),gcV41Tr("MASS",lang),"B [mm]","H [mm]","μ_roll","slope [%]","v_wind [m/s]","Cd","solidity [0..1]","lever [mm]",gcV41Tr("START_FACTOR",lang),"speed [m/s]","η","cycles/h","cycle [s]"};
+      case 10:return new String[]{"h [m]",gcV41Tr("POST_SPACING",lang),"L [m]","v_wind [m/s]","Cd","solidity [0..1]","M_allow [kNm]","σ_allow [MPa]"};
+      case 11:return new String[]{"L [m]","W [m]","D/H [m]",gcV41Tr("COUNT",lang),gcV41Tr("RESERVE",lang),"rebar [kg/m³]","truck [m³]","bottom form [0/1]"};
+      case 12:return new String[]{"wall L [m]","wall H [m]","block L [mm]","block H [mm]",gcV41Tr("RESERVE",lang),"corners [db]","free ends [db]","vertical spacing [mm]","horizontal bars/course","pillars [db]","bars/pillar","fill [L/block]"};
+      case 13:return new String[]{gcV41Tr("AREA",lang),gcV41Tr("EXCAVATION",lang),gcV41Tr("SUBBASE",lang),"subbase ρ [t/m³]","loose factor",gcV41Tr("BEDDING",lang),"bedding ρ [t/m³]","paver reserve [%]","geotextile [%]","joint sand [kg/m²]",gcV41Tr("EDGE",lang)};
+      case 14:return new String[]{"m1 [kg]","x1 [mm]","y1 [mm]","z1 [mm]","m2 [kg]","x2 [mm]","y2 [mm]","z2 [mm]","m3 [kg]","x3 [mm]","y3 [mm]","z3 [mm]"};
+      case 15:return new String[]{"B [mm]","H [mm]","panel [kg/m²]","hardware [kg]","balance [%]","friction ratio","drum r [mm]","head avail [mm]","head req [mm]","side avail [mm]","side req [mm]"};
+      case 16:return new String[]{"L [mm]","max post [mm]","post W [mm]","baluster W [mm]","max clear gap [mm]","sides [db]"};
+      case 17:return new String[]{"hall L [m]","hall W [m]","eave H [m]","frame spacing [m]","roof slope [°]","purlin spacing [m]","v_wind [m/s]","wall Cd","snow [kN/m²]","σ_allow [MPa]"};
+      case 18:return new String[]{"Iz_base [A]","Ib [A]","In [A]","kT","kG","kO","start multiplier","phase [1/3]","U [V]","L_one-way [m]","R [mΩ/m]","X [mΩ/m]","cosφ"};
+      case 19:return new String[]{gcV41Tr("PROCESS",lang),"ISO 4063 ref",gcV41Tr("MATERIAL",lang),"t [mm]",gcV41Tr("JOINT",lang),gcV41Tr("POSITION",lang),"I [A]","U [V]","travel [mm/min]","η_thermal","weld L [m]","filler [kg]","arc time [min]","gas [L/min]","usable gas [L]"};
+      case 20:return new String[]{"struct rise [mm]","lower finish [mm]","upper finish [mm]","max run [mm]","R_min [mm]","R_max [mm]","G_min [mm]","G_max [mm]","target 2R+G [mm]"};
+      case 21:return new String[]{gcV41Tr("COST",lang),gcV41Tr("LABOR_H",lang),"hourly rate","travel","other direct","fixed overhead","overhead [%]","overhead / h","net revenue",gcV41Tr("TARGET_MARGIN",lang),"VAT [%]",gcV41Tr("PLANNED_COST",lang),gcV41Tr("ACTUAL_COST",lang),"planned h","actual h"};
+      default:return new String[0];
+    }
+  }
+
+  @SimpleFunction(description="Configures native Engineering inputs with the current 12-language GateCraft labels.")
+  public void CenterEngineeringConfigureV41() {
+    CenterEngineeringConfigure();
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();
+    int t=gcEngToolIndex(m), lang=gcCLang();
+    String[] labels=gcV41EngineeringLabels(t,lang);
+    for(int i=1;i<=15;i++){
+      String k=String.format(java.util.Locale.US,"%02d",i);
+      if(i<=labels.length) gcCTextSet(m,"LBL_ENG_IN"+k,labels[i-1]);
+    }
+  }
+
+  @SimpleFunction(description="Opens a GateCraft Center page and applies v4.1 Engineering localization after the native page transition.")
+  public void CenterOpenPageV41(String pageName) {
+    CenterOpenPage(pageName);
+    final String p=pageName==null?"":pageName.trim().toUpperCase(java.util.Locale.ROOT);
+    if("ENGINEERING".equals(p)) {
+      new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new java.lang.Runnable(){public void run(){try{CenterEngineeringConfigureV41();}catch(Throwable ignored){}}},140L);
+    }
+  }
+
+  private boolean gcV41EngineeringInputsValid(int t, double[] v) {
+    if(t==2) return v[0]>0 && v[1]>0 && v[3]>0 && v[4]>0;
+    if(t==3) return v[0]>0 && v[2]>0 && v[3]>0;
+    if(t==6) return v[0]>0 && v[1]>0 && v[2]>0 && v[3]>0 && v[4]>0 && v[6]>0 && v[7]>0;
+    if(t==9) {
+      boolean sliding=v[0]<1.5;
+      if(v[1]<=0 || v[2]<=0 || v[3]<=0 || v[7]<=0 || v[8]<=0 || v[10]<=0 || v[12]<=0) return false;
+      if(!sliding && v[9]<=0) return false;
+      return true;
+    }
+    if(t==11) return v[0]>0 && v[1]>0 && v[2]>0 && v[3]>0 && v[4]>=0 && v[5]>=0 && v[6]>=0;
+    if(t==13) return v[0]>0 && v[1]>=0 && v[2]>=0 && v[3]>0 && v[4]>0 && v[5]>=0 && v[6]>0 && v[7]>=0 && v[8]>=0 && v[9]>=0 && v[10]>=0;
+    return true;
+  }
+
+  @SimpleFunction(description="Runs Engineering calculation with v4.1 input validation and hinge-load clarification.")
+  public void CenterEngineeringCalculateV41() {
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();
+    int t=gcEngToolIndex(m); double[] v=gcEngV(m);
+    if(!gcV41EngineeringInputsValid(t,v)) {
+      gcEngLastMetrics=new java.util.HashMap<String,Double>();
+      gcCTextSet(m,"LBL_ENG_RESULT","—"); gcCTextSet(m,"LBL_ENG_FORMULA",""); gcCTextSet(m,"LBL_ENG_WARNINGS",gcV41Tr("INVALID",gcCLang())); return;
+    }
+    CenterEngineeringCalculate();
+    if(t==6) {
+      double weight=v[2]*GC_ENG_G;
+      double per=v[3]>0?weight/v[3]:0;
+      double moment=weight*(v[0]/1000d)/2d;
+      double couple=v[4]>0?moment/(v[4]/1000d):0;
+      String old=gcCTextGet(m,"LBL_ENG_RESULT");
+      String extra=gcV41Tr("VERT_HINGE",gcCLang())+" = "+gcEF(per,1)+" N\n"+gcV41Tr("MOMENT_REACTION",gcCLang())+" = "+gcEF(couple,1)+" N";
+      gcCTextSet(m,"LBL_ENG_RESULT",old.length()>0?old+"\n"+extra:extra);
+      gcEngPut(gcEngLastMetrics,"verticalPerHingeN",per);
+      gcEngPut(gcEngLastMetrics,"momentCoupleReactionN",couple);
+    }
+  }
+
+  @SimpleFunction(description="Saves v4.1 Engineering A/B result together with its tool identity.")
+  public void CenterEngineeringSaveSideV41(String side) {
+    CenterEngineeringCalculateV41();
+    int t=gcEngToolIndex(gcBuildNamedComponentMap());
+    if("B".equalsIgnoreCase(side)) gcV41EngBTool=t; else gcV41EngATool=t;
+    CenterEngineeringSaveSide(side);
+  }
+
+  @SimpleFunction(description="Compares A/B only when both snapshots originate from the same Engineering tool.")
+  public void CenterEngineeringCompareV41() {
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();
+    if(gcV41EngATool<=0 || gcV41EngBTool<=0 || gcV41EngATool!=gcV41EngBTool) {
+      gcCTextSet(m,"LBL_ENG_RESULT",gcV41Tr("SAME_TOOL",gcCLang())); return;
+    }
+    CenterEngineeringCompare();
+  }
+
+  @SimpleFunction(description="Project Center save wrapper with localized default project name.")
+  public String ProjectHubSaveFromScreenV41() {
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();
+    String name=gcProjectGetText(m,"TB_PROJECT_NAME").trim();
+    if(name.length()==0) {
+      String[] base={"Projekt","Project","Projekt","Proyecto","Projet","项目","Progetto","Projeto","Projekt","Project","Proiect","Проект"};
+      int l=(int)Math.round(PlatformLanguagePreference()); if(l<1||l>12)l=2;
+      name=base[l-1]+" "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.US).format(new java.util.Date());
+      gcProjectSetText(m,"TB_PROJECT_NAME",name);
+    }
+    return ProjectHubSaveFromScreen();
+  }
+
+  @SimpleFunction(description="Project delete wrapper that clears a deleted active project id.")
+  public boolean ProjectHubDeleteFromScreenV41() {
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();
+    String id=gcProjectGetText(m,"LBL_PROJECT_CURRENT_ID").trim();
+    boolean ok=ProjectHubDeleteFromScreen();
+    if(ok && id.equals(gcPlatformString(gcPlatformTinyGet("GC_ACTIVE_PROJECT_ID",""),""))) gcPlatformTinyPut("GC_ACTIVE_PROJECT_ID","");
+    return ok;
+  }
+
+  private String gcV41PhaseText(String code,int lang) {
+    String c=code==null?"":code.toUpperCase(java.util.Locale.ROOT);
+    String[][] rows={
+      {"SURVEY","Felmérés","Survey","Aufmaß","Relevamiento","Relevé","测量","Sopralluogo","Levantamento","Pomiar","Opname","Măsurare","Замер"},
+      {"DESIGN","Tervezés","Design","Planung","Diseño","Conception","设计","Progettazione","Projeto","Projektowanie","Ontwerp","Proiectare","Проектирование"},
+      {"TRAVEL","Kiszállás","Travel","Anfahrt","Desplazamiento","Déplacement","出行","Trasferta","Deslocação","Dojazd","Voorrijkosten","Deplasare","Выезд"},
+      {"REPAIR","Javítás","Repair","Reparatur","Reparación","Réparation","维修","Riparazione","Reparação","Naprawa","Reparatie","Reparație","Ремонт"},
+      {"MATERIAL","Anyag","Material","Material","Material","Matériau","材料","Materiale","Material","Materiał","Materiaal","Material","Материал"},
+      {"PRODUCTION","Gyártás","Production","Fertigung","Producción","Fabrication","生产","Produzione","Produção","Produkcja","Productie","Producție","Производство"},
+      {"FINISH","Felületkezelés","Finishing","Oberfläche","Acabado","Finition","表面处理","Finitura","Acabamento","Wykończenie","Afwerking","Finisare","Отделка"},
+      {"DELIVERY","Szállítás","Delivery","Lieferung","Entrega","Livraison","运输","Consegna","Entrega","Dostawa","Levering","Livrare","Доставка"},
+      {"INSTALL","Telepítés","Installation","Montage","Instalación","Installation","安装","Installazione","Instalação","Montaż","Installatie","Instalare","Монтаж"}
+    };
+    int l=(lang<1||lang>12)?2:lang; for(String[] r:rows)if(r[0].equals(c))return r[l]; return c;
+  }
+
+  @SimpleFunction(description="Applies a project template using stable phase codes and localized display text.")
+  public double BusinessTemplateApplyFromScreenV41() {
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();
+    String pid=gcBusActiveProject(); if(pid.length()==0)return 0;
+    int idx=gcPlatformInt(gcPlatformGetProperty(m.get("SP_BUS_TEMPLATE"),"SelectionIndex",1),1);
+    String[] phases;
+    if(idx==3) phases=new String[]{"SURVEY","TRAVEL","REPAIR","MATERIAL"};
+    else if(idx==2) phases=new String[]{"SURVEY","MATERIAL","PRODUCTION","FINISH","DELIVERY","INSTALL"};
+    else phases=new String[]{"SURVEY","DESIGN","MATERIAL","PRODUCTION","FINISH","DELIVERY","INSTALL"};
+    int lang=gcCLang();
+    for(String ph:phases) BusinessCostSave("",pid,"PLAN","TEMPLATE_"+ph,gcV41PhaseText(ph,lang),1,0,"");
+    BusinessRefreshScreen();
+    return phases.length;
+  }
+
+  @SimpleFunction(description="GateCraft Center v4.1 action router for audit fixes while preserving the existing v3.8 action engine.")
+  public void CenterActionV41(String action) {
+    String a=action==null?"":action.trim().toUpperCase(java.util.Locale.ROOT);
+    if("PROJECT_SAVE".equals(a)){ProjectHubSaveFromScreenV41();return;}
+    if("PROJECT_DELETE".equals(a)){ProjectHubDeleteFromScreenV41();return;}
+    if("BUS_TEMPLATE".equals(a)){BusinessTemplateApplyFromScreenV41();return;}
+    if("ENG_CONFIGURE".equals(a)){CenterEngineeringConfigureV41();return;}
+    if("ENG_CALC".equals(a)){CenterEngineeringCalculateV41();return;}
+    if("ENG_SAVE_A".equals(a)){CenterEngineeringSaveSideV41("A");return;}
+    if("ENG_SAVE_B".equals(a)){CenterEngineeringSaveSideV41("B");return;}
+    if("ENG_COMPARE".equals(a)){CenterEngineeringCompareV41();return;}
+    CenterAction(action);
+  }
