@@ -1,0 +1,56 @@
+  // GateCraft v3.8 native GateCraft Center + native Engineering tools
+  // New functionality only. Existing calculation engines and Cutting Optimizer are untouched.
+  private static final double GC_ENG_G = 9.80665d;
+  private java.util.HashMap<String,Double> gcEngLastMetrics = new java.util.HashMap<String,Double>();
+  private java.util.HashMap<String,Double> gcEngA = null, gcEngB = null;
+  private String gcCenterPage = "HOME";
+  private String gcCenterPendingBackup = "";
+  private String gcCenterPendingBackupMode = "";
+  private android.os.Handler gcCenterHandler;
+
+  private org.json.JSONObject gcCenterData=null;
+  private void gcCEnsureData(){if(gcCenterData!=null)return;java.io.InputStream in=null;try{in=com.google.appinventor.components.runtime.util.MediaUtil.openMedia(form,"gc_center_v38.json");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[8192];int n;while((n=in.read(b))>=0)if(n>0)out.write(b,0,n);gcCenterData=new org.json.JSONObject(new String(out.toByteArray(),"UTF-8"));}catch(Throwable ex){gcCenterData=new org.json.JSONObject();}finally{try{if(in!=null)in.close();}catch(Throwable ignored){}}}
+  private int gcCLang(){int l=(int)Math.round(PlatformLanguagePreference());return l<1||l>12?2:l;}
+  private String gcCText(String k){gcCEnsureData();try{org.json.JSONArray a=gcCenterData.getJSONObject("texts").getJSONArray(k);int i=gcCLang()-1;return i>=0&&i<a.length()?a.optString(i,k):k;}catch(Throwable ex){return k;}}
+  private org.json.JSONObject gcCTool(int i){gcCEnsureData();try{return gcCenterData.getJSONArray("tools").getJSONObject(i-1);}catch(Throwable ex){return new org.json.JSONObject();}}
+  private String gcCToolTitle(int i){try{org.json.JSONArray a=gcCTool(i).getJSONArray("titles");return a.optString(gcCLang()-1,"");}catch(Throwable ex){return "";}}
+  private Object gcC(java.util.HashMap<String,Object> m,String n){return m.get(n);}
+  private void gcCSet(java.util.HashMap<String,Object> m,String n,String p,Object v){Object c=m.get(n);if(c!=null)try{gcSetProperty(c,p,v);}catch(Throwable ignored){}}
+  private void gcCTextSet(java.util.HashMap<String,Object> m,String n,String v){gcCSet(m,n,"Text",v==null?"":v);}
+  private String gcCTextGet(java.util.HashMap<String,Object> m,String n){Object c=m.get(n);return c==null?"":gcPlatformString(gcPlatformGetProperty(c,"Text",""),"");}
+  private double gcCNum(java.util.HashMap<String,Object> m,String n){return SafeNumber(gcCTextGet(m,n),0);}
+  private boolean gcCVis(java.util.HashMap<String,Object> m,String n){Object c=m.get(n);Object v=c==null?Boolean.FALSE:gcPlatformGetProperty(c,"Visible",Boolean.FALSE);return v instanceof Boolean?((Boolean)v).booleanValue():"true".equalsIgnoreCase(String.valueOf(v));}
+  private void gcCVisible(java.util.HashMap<String,Object> m,String n,boolean v){gcCSet(m,n,"Visible",Boolean.valueOf(v));}
+  private String gcCTheme(){return gcPlatformString(gcPlatformTinyGet("kozos_tema","default"),"default").trim().toLowerCase(java.util.Locale.ROOT);}
+  private String gcCFormImage(String t){if("marka1".equals(t))return "MAKITAA.jpg";if("marka2".equals(t))return "Image-1(1).jpg";if("marka3".equals(t))return "milwoukeee.jpg";return "ALAP.jpg";}
+  private void gcCCall(Object c,String name,Object... args){if(c==null)return;try{for(java.lang.reflect.Method mm:c.getClass().getMethods()){if(!mm.getName().equals(name)||mm.getParameterTypes().length!=args.length)continue;mm.invoke(c,args);return;}}catch(Throwable ignored){}}
+  private void gcCAlert(java.util.HashMap<String,Object> m,String msg){gcCCall(m.get("Notifier_BACKUP"),"ShowAlert",msg==null?"":msg);}
+
+  private void gcCApplyTheme(java.util.HashMap<String,Object> m){
+    String t=gcCTheme(); boolean forge="marka2".equals(t); int normal=forge?0xFFFFFFFF:0xFF000000; int hbg=forge?0xFF181818:0xFFFFFFFF; int htxt=forge?0xFFFFFFFF:0xFF000000;
+    gcCSet(m,"Screen_EngineeringLab","BackgroundImage",gcCFormImage(t));
+    for(java.util.Map.Entry<String,Object> e:m.entrySet()){String n=e.getKey()==null?"":e.getKey();Object c=e.getValue();if(c==null)continue;String u=n.toUpperCase(java.util.Locale.ROOT);
+      if(c instanceof com.google.appinventor.components.runtime.Button || c instanceof com.google.appinventor.components.runtime.FilePicker || c instanceof com.google.appinventor.components.runtime.ListPicker){
+        boolean head="BTN_GC_BACK".equals(u); gcCSet(m,n,"Image",head?gcV35BackImage(t):gcV34ButtonImage(t)); gcCSet(m,n,"TextColor",Integer.valueOf(head?htxt:gcV35ButtonText(t))); gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
+      } else if(c instanceof com.google.appinventor.components.runtime.Label){gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));gcCSet(m,n,"TextColor",Integer.valueOf((u.contains("TAKARO")||u.equals("LBL_GC_PAGETITLE"))?htxt:normal));
+      } else if(c instanceof com.google.appinventor.components.runtime.TextBox){gcCSet(m,n,"BackgroundColor",Integer.valueOf(0xFFFFFFFF));gcCSet(m,n,"TextColor",Integer.valueOf(0xFF000000));gcCSet(m,n,"HintColor",Integer.valueOf(0xFF000000));
+      } else if(c instanceof com.google.appinventor.components.runtime.Spinner){gcCSet(m,n,"TextColor",Integer.valueOf(0xFF000000));
+      } else if(c instanceof com.google.appinventor.components.runtime.ListView){gcCSet(m,n,"BackgroundColor",Integer.valueOf(0xFFFFFFFF));gcCSet(m,n,"TextColor",Integer.valueOf(0xFF000000));gcCSet(m,n,"TextColorDetail",Integer.valueOf(0xFF000000));
+      } else if(c instanceof com.google.appinventor.components.runtime.CheckBox || c instanceof com.google.appinventor.components.runtime.Switch){gcCSet(m,n,"TextColor",Integer.valueOf(normal));
+      } else if(c instanceof com.google.appinventor.components.runtime.HorizontalArrangement || c instanceof com.google.appinventor.components.runtime.VerticalArrangement || c instanceof com.google.appinventor.components.runtime.VerticalScrollArrangement){
+        if("HA_GC_HEADER".equals(u)||"VA_GC_TAKARO".equals(u))gcCSet(m,n,"BackgroundColor",Integer.valueOf(hbg)); else gcCSet(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
+      }
+    }
+    gcCSet(m,"BTN_GC_Back","Width",Integer.valueOf(-1015));gcCTextSet(m,"BTN_GC_Back","‹");
+    gcCSet(m,"HA_PROJECT_HEADER","BackgroundColor",Integer.valueOf(0x00FFFFFF));gcCSet(m,"LBL_PROJECT_TITLE","TextColor",Integer.valueOf(normal));
+  }
+
+  private void gcCApplyTexts(java.util.HashMap<String,Object> m){int l=gcCLang();
+    gcCTextSet(m,"LBL_GC_HOME_TITLE",gcCText("CENTER"));gcCTextSet(m,"LBL_GC_HOME_SUB",gcCText("HOME_SUB"));
+    gcCTextSet(m,"BTN_GC_PROFILE_OPEN",gcPlatformText("PROFILE_TITLE",l));gcCTextSet(m,"BTN_GC_BACKUP_OPEN",BackupUiText("OPEN",l));gcCTextSet(m,"BTN_GC_PROJECT_OPEN",gcProjectUiText("TITLE",l));gcCTextSet(m,"BTN_GC_BUSINESS_OPEN",gcBusText("TITLE",l));gcCTextSet(m,"BTN_GC_ENGINEERING_OPEN",gcCText("ENGINEERING"));gcCTextSet(m,"BTN_GC_HOME_BACK",gcCText("BACK"));
+    gcCTextSet(m,"LBL_ENG_TITLE",gcCText("ENGINEERING"));gcCTextSet(m,"LBL_ENG_DESC",gcCText("ENGINEERING_DESC"));gcCTextSet(m,"BTN_ENG_PROFILE_TOGGLE",gcCText("PROFILE_SETTINGS"));gcCTextSet(m,"BTN_ENG_PROFILE_SAVE",gcCText("PROFILE_SAVE"));gcCTextSet(m,"LBL_ENG_TOOL_LABEL",gcCText("TOOL"));gcCTextSet(m,"BTN_ENG_CALCULATE",gcCText("CALCULATE"));gcCTextSet(m,"BTN_ENG_SAVE_A",gcCText("SAVE_A"));gcCTextSet(m,"BTN_ENG_SAVE_B",gcCText("SAVE_B"));gcCTextSet(m,"BTN_ENG_COMPARE",gcCText("COMPARE"));gcCTextSet(m,"LBL_ENG_RESULT_TITLE",gcCText("RESULT"));gcCTextSet(m,"LBL_ENG_FORMULA_TITLE",gcCText("FORMULA"));gcCTextSet(m,"LBL_ENG_WARN_TITLE",gcCText("WARNINGS"));gcCTextSet(m,"BTN_ENG_BACK",gcCText("BACK"));
+    gcCTextSet(m,"LBL_ENG_PROFILE_WIND","v_wind [m/s]");gcCTextSet(m,"LBL_ENG_PROFILE_SNOW","snow [kN/m²]");gcCTextSet(m,"LBL_ENG_PROFILE_RHO","ρ_air [kg/m³]");gcCTextSet(m,"LBL_ENG_PROFILE_SIGMA","σ_allow [MPa]");gcCTextSet(m,"LBL_ENG_PROFILE_KT","kT");gcCTextSet(m,"LBL_ENG_PROFILE_KG","kG");gcCTextSet(m,"LBL_ENG_PROFILE_KO","kO");
+    StringBuilder sb=new StringBuilder();for(int i=1;i<=21;i++){if(i>1)sb.append(",");sb.append(gcCToolTitle(i));}Object sp=m.get("SP_ENG_TOOL");if(sp!=null)gcSetProperty(sp,"ElementsFromString",sb.toString());
+  }
+
+  private void gcCHidePages(java.util.HashMap<String,Object> m){for(String n:new String[]{"VA_GC_HOME","VA_PROFILE","VA_BACKUP","VA_PROJECT_HUB","VA_BUSINESS","VA_GC_ENGINEERING"})gcCVisible(m,n,false);}
