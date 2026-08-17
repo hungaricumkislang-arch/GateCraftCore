@@ -1,0 +1,69 @@
+  // ------------------------------------------------------------------
+  // GateCraft v3.8 targeted UI/language fixes.
+  // No layout observer, no polling guard, no visibility rewrite on Screen1.
+  // ------------------------------------------------------------------
+  private String gcV38L(String key, int lang) {
+    int l=lang<1||lang>12?2:lang;
+    String[][] r=new String[][]{
+      {"LOADING","Betöltés…","Loading…","Laden…","Cargando…","Chargement…","正在加载…","Caricamento…","A carregar…","Ładowanie…","Laden…","Se încarcă…","Загрузка…"},
+      {"STAIR","LépcsőPro","StairPro","TreppenPro","EscaleraPro","EscalierPro","楼梯Pro","ScalaPro","EscadaPro","SchodyPro","TrapPro","ScarăPro","ЛестницаPro"},
+      {"TECH","Műszaki Segéd","Technical Guide","Technischer Leitfaden","Guía técnica","Guide technique","技术指南","Guida tecnica","Guia técnico","Poradnik techniczny","Technische gids","Ghid tehnic","Технический справочник"},
+      {"MOTOR","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag","MotorDiag"},
+      {"ELECTRO","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro"},
+      {"CENTER","GateCraft Központ","GateCraft Center","GateCraft-Zentrale","Centro GateCraft","Centre GateCraft","GateCraft 中心","Centro GateCraft","Centro GateCraft","Centrum GateCraft","GateCraft-centrum","Centru GateCraft","Центр GateCraft"},
+      {"CLEAR","Kalkulátor mentések törlése","Clear saved calculator data","Gespeicherte Rechnerdaten löschen","Borrar datos guardados de calculadoras","Effacer les données enregistrées des calculateurs","清除已保存的计算器数据","Cancella dati salvati dei calcolatori","Limpar dados guardados das calculadoras","Usuń zapisane dane kalkulatorów","Opgeslagen calculatorgegevens wissen","Șterge datele salvate ale calculatoarelor","Удалить сохранённые данные калькуляторов"},
+      {"CLEAR_TITLE","Mentett kalkulátoradatok törlése","Clear saved calculator data","Gespeicherte Rechnerdaten löschen","Borrar datos guardados de calculadoras","Effacer les données enregistrées des calculateurs","清除已保存的计算器数据","Cancella dati salvati dei calcolatori","Limpar dados guardados das calculadoras","Usuń zapisane dane kalkulatorów","Opgeslagen calculatorgegevens wissen","Șterge datele salvate ale calculatoarelor","Удаление сохранённых данных калькуляторов"},
+      {"BACK","Vissza","Back","Zurück","Atrás","Retour","返回","Indietro","Voltar","Wstecz","Terug","Înapoi","Назад"}
+    };
+    for(String[] x:r)if(x[0].equals(key))return x[l];return key;
+  }
+
+  private void gcV38Set(java.util.HashMap<String,Object> map,String n,String p,Object v){Object c=map.get(n);if(c!=null)try{gcSetProperty(c,p,v);}catch(Throwable ignored){}}
+
+  private void gcV38ApplyModernExtras() {
+    if(form==null)return;
+    String screen=form.getClass().getSimpleName();
+    if(!("Screen_ElectroPro".equals(screen)||"Screen_LepcsoPro".equals(screen)||"Screen_MuszakiSeged".equals(screen)||"Screen_MotorDiag".equals(screen)))return;
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();
+    String theme=gcPlatformString(gcPlatformTinyGet("kozos_tema","default"),"default").trim().toLowerCase(java.util.Locale.ROOT);
+    boolean forge="marka2".equals(theme);
+    int bg=forge?0xFF181818:0xFFFFFFFF, fg=forge?0xFFFFFFFF:0xFF000000;
+    int lang=(int)Math.round(PlatformLanguagePreference());if(lang<1||lang>12)lang=2;
+    String header="",back="",title="",mini="",cover="",coverTitle="",coverLoading="",moduleKey="";
+    if("Screen_ElectroPro".equals(screen)){header="HA_EP_Header";back="BTN_EP_Back";title="LBL_EP_PageTitle";cover="VA_EP_TAKARO";coverTitle="LBL_EP_TAKARO_TITLE";coverLoading="LBL_EP_TAKARO_LOADING";moduleKey="ELECTRO";}
+    else if("Screen_LepcsoPro".equals(screen)){header="HA_SP_Header";back="BTN_SP_Back";title="LBL_SP_PageTitle";cover="VA_SP_TAKARO";coverTitle="LBL_SP_TAKARO_TITLE";coverLoading="LBL_SP_TAKARO_LOADING";moduleKey="STAIR";}
+    else if("Screen_MuszakiSeged".equals(screen)){header="HA_TG_Header";back="BTN_TG_Back";title="LBL_TG_PageTitle";mini="LBL_TG_ContextMini";cover="VA_TG_TAKARO";coverTitle="LBL_TG_TAKARO_TITLE";coverLoading="LBL_TG_TAKARO_LOADING";moduleKey="TECH";}
+    else {header="HA_MD_Header";back="BTN_MD_Back";title="LBL_MD_PageTitle";mini="LBL_MD_ControllerMini";cover="VA_MD_TAKARO";coverTitle="LBL_MD_TAKARO_TITLE";coverLoading="LBL_MD_TAKARO_LOADING";moduleKey="MOTOR";}
+    gcV38Set(m,header,"BackgroundColor",Integer.valueOf(bg));
+    for(String n:new String[]{title,mini})if(n.length()>0){gcV38Set(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));gcV38Set(m,n,"TextColor",Integer.valueOf(fg));}
+    gcV38Set(m,back,"Visible",Boolean.TRUE);gcV38Set(m,back,"Text","‹");gcV38Set(m,back,"Width",Integer.valueOf(-1015));gcV38Set(m,back,"Image",gcV35BackImage(theme));gcV38Set(m,back,"TextColor",Integer.valueOf(fg));gcV38Set(m,back,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
+    gcV38Set(m,cover,"BackgroundColor",Integer.valueOf(bg));gcV38Set(m,coverTitle,"BackgroundColor",Integer.valueOf(0x00FFFFFF));gcV38Set(m,coverLoading,"BackgroundColor",Integer.valueOf(0x00FFFFFF));gcV38Set(m,coverTitle,"TextColor",Integer.valueOf(fg));gcV38Set(m,coverLoading,"TextColor",Integer.valueOf(fg));gcV38Set(m,coverTitle,"Text",gcV38L(moduleKey,lang));gcV38Set(m,coverLoading,"Text",gcV38L("LOADING",lang));
+  }
+
+  private void gcV38ApplyScreen1Texts() {
+    if(form==null||!"Screen1".equals(form.getClass().getSimpleName()))return;
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();int l=(int)Math.round(PlatformLanguagePreference());if(l<1||l>12)l=2;
+    gcV38Set(m,"BTN_ELECTROPRO","Text",gcV38L("ELECTRO",l));
+    gcV38Set(m,"BTN_LEPCSOPRO","Text",gcV38L("STAIR",l));
+    gcV38Set(m,"BTN_MOTORDIAG","Text",gcV38L("MOTOR",l));
+    gcV38Set(m,"BTN_TECHGUIDE","Text",gcV38L("TECH",l));
+    gcV38Set(m,"BTN_GATECRAFT_CENTER_OPEN","Text",gcV38L("CENTER",l));
+    gcV38Set(m,"BTN_MODULE_CLEAR_OPEN","Text",gcV38L("CLEAR",l));
+    gcV38Set(m,"LBL_MODULE_CLEAR_TITLE","Text",gcV38L("CLEAR_TITLE",l));
+    gcV38Set(m,"BTN_MODULE_CLEAR_BACK","Text",gcV38L("BACK",l));
+  }
+
+  private void gcV38PrepareScreen1Extras() {
+    if(form==null||!"Screen1".equals(form.getClass().getSimpleName()))return;
+    java.util.HashMap<String,Object> m=gcBuildNamedComponentMap();String theme=gcPlatformString(gcPlatformTinyGet("kozos_tema","default"),"default").trim().toLowerCase(java.util.Locale.ROOT);int normal=gcV34NormalText(theme),bt=gcV35ButtonText(theme);String img=gcV34ButtonImage(theme);
+    gcV38ApplyScreen1Texts();
+    for(java.util.Map.Entry<String,Object> e:m.entrySet()){
+      String n=e.getKey()==null?"":e.getKey();String u=n.toUpperCase(java.util.Locale.ROOT);Object c=e.getValue();if(c==null)continue;
+      boolean clear=u.contains("MODULE_CLEAR")||u.startsWith("BTN_CLEAR_");
+      if(!clear)continue;
+      if(c instanceof com.google.appinventor.components.runtime.Button){gcV38Set(m,n,"Image",img);gcV38Set(m,n,"TextColor",Integer.valueOf(bt));gcV38Set(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));}
+      else if(c instanceof com.google.appinventor.components.runtime.Label){gcV38Set(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));gcV38Set(m,n,"TextColor",Integer.valueOf(normal));}
+      else if(c instanceof com.google.appinventor.components.runtime.HorizontalArrangement||c instanceof com.google.appinventor.components.runtime.VerticalArrangement||c instanceof com.google.appinventor.components.runtime.VerticalScrollArrangement){gcV38Set(m,n,"BackgroundColor",Integer.valueOf(0x00FFFFFF));}
+    }
+    gcV38Set(m,"BTN_GATECRAFT_CENTER_OPEN","Image",img);gcV38Set(m,"BTN_GATECRAFT_CENTER_OPEN","TextColor",Integer.valueOf(bt));
+  }
