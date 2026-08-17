@@ -1,0 +1,193 @@
+  // ------------------------------------------------------------------
+  // GateCraft v3.6 protected calculation fixes.
+  // New method names intentionally preserve all v3.5 methods byte-for-byte,
+  // especially every Cut* cutting-optimizer method.
+  // ------------------------------------------------------------------
+
+  @SimpleFunction(description = "GateCraft v3.6 trapezoidal-sheet structure recommendation with corrected physical post count, footing volume and profile paint areas.")
+  public YailList TrapezStructureRecommendationV36(double sheetHeightMm, double fenceLengthMm) {
+    double postSpacing;
+    String postProfile;
+    String footingLabel;
+    double postBaseHeight = sheetHeightMm;
+    double horizontalRows;
+    if (sheetHeightMm <= 2000.0d) postSpacing = 2500.0d;
+    else if (sheetHeightMm <= 3000.0d) postSpacing = 2200.0d;
+    else postSpacing = 2000.0d;
+
+    double postCount = fenceLengthMm > 0.0d ? Math.ceil(fenceLengthMm / postSpacing) + 1.0d : 0.0d;
+    if (sheetHeightMm <= 2000.0d) {
+      postProfile = "60x60"; footingLabel = "400x400x800";
+    } else if (sheetHeightMm <= 3000.0d) {
+      postProfile = "80x80"; footingLabel = "500x500x900";
+    } else {
+      postProfile = "100x100"; footingLabel = "600x600x1000";
+    }
+    if (sheetHeightMm <= 1000.0d) horizontalRows = 2.0d;
+    else if (sheetHeightMm <= 1600.0d) horizontalRows = 3.0d;
+    else if (sheetHeightMm <= 2500.0d) horizontalRows = 4.0d;
+    else horizontalRows = 5.0d;
+
+    double horizontalLengthTotal = horizontalRows * fenceLengthMm;
+    String horizontalProfile = "40x20";
+    double footingM3;
+    double profileExtra;
+    double postPerimeterMm;
+    if ("60x60".equals(postProfile)) { footingM3 = 0.128d; profileExtra = 800.0d; postPerimeterMm = 240.0d; }
+    else if ("80x80".equals(postProfile)) { footingM3 = 0.225d; profileExtra = 900.0d; postPerimeterMm = 320.0d; }
+    else { footingM3 = 0.360d; profileExtra = 1000.0d; postPerimeterMm = 400.0d; }
+    double horizontalPerimeterMm = 120.0d; // 2 x (40 + 20)
+    double concreteTotalM3 = footingM3 * postCount;
+    double postLengthTotal = (postBaseHeight + profileExtra) * postCount;
+    double postPaintArea = (postLengthTotal * postPerimeterMm) / 1000000.0d;
+    double horizontalPaintArea = (horizontalLengthTotal * horizontalPerimeterMm) / 1000000.0d;
+    double totalPaintArea = postPaintArea + horizontalPaintArea;
+    return list(postSpacing, postCount, postProfile, footingLabel, postBaseHeight,
+        horizontalRows, horizontalLengthTotal, horizontalProfile, footingM3, profileExtra,
+        concreteTotalM3, postLengthTotal, postPerimeterMm, postPaintArea, horizontalPaintArea, totalPaintArea);
+  }
+
+  @SimpleFunction(description = "GateCraft v3.6 railing profile lookup. Fixes the custom round-post size selector while preserving all other v3.5 mappings.")
+  public YailList RailingProfileDataV36(String role, double typeIndex, double sizeIndex, double auxiliaryIndex,
+      double customKgPerMeter, double currentWeld, double currentM2) {
+    String r = role == null ? "" : role.toLowerCase(java.util.Locale.US);
+    int t = (int)Math.round(typeIndex);
+    int s = (int)Math.round(sizeIndex);
+    if ("post".equals(r) && t == 2 && s == 5) {
+      return list(customKgPerMeter, currentWeld, 0.106d);
+    }
+    return RailingProfileData(role, typeIndex, sizeIndex, auxiliaryIndex,
+        customKgPerMeter, currentWeld, currentM2);
+  }
+
+  @SimpleFunction(description = "GateCraft v3.6 welding filler calculation. Corrects MMA stump-loss percentage in the explicit-consumption path.")
+  public YailList WeldingFillerExactV36(String material, String process, double weldLength,
+      double totalWeldLength, double consumptionResult, double weldTypeFactor,
+      double positionConsumableFactor, double passCount, double thickness,
+      double stumpLossPercent, double electrodeWeightPiece, double wireEfficiency,
+      double electrodeEfficiency, double rodEfficiency, double fluxWireEfficiency,
+      double wirePriceKg, double electrodePriceKg, double rodPriceKg, double fluxWirePriceKg) {
+    if (!(consumptionResult > 0.0d && "mma".equals(process))) {
+      return WeldingFillerExact(material, process, weldLength, totalWeldLength, consumptionResult,
+          weldTypeFactor, positionConsumableFactor, passCount, thickness, stumpLossPercent,
+          electrodeWeightPiece, wireEfficiency, electrodeEfficiency, rodEfficiency,
+          fluxWireEfficiency, wirePriceKg, electrodePriceKg, rodPriceKg, fluxWirePriceKg);
+    }
+    if (passCount <= 0.0d) passCount = 1.0d;
+    if (electrodeWeightPiece <= 0.0d) electrodeWeightPiece = 0.035d;
+    double density = WeldingDensityExact(material);
+    double weldArea = thickness * thickness * passCount;
+    double weldVolume = (totalWeldLength * weldArea) / 1000000000.0d;
+    double weldWeight = weldVolume * density;
+    double fillerKg = (weldLength / 1000.0d) * consumptionResult;
+    fillerKg *= weldTypeFactor;
+    fillerKg *= positionConsumableFactor;
+    fillerKg *= passCount;
+    fillerKg *= (1.0d + (stumpLossPercent / 100.0d));
+    double electrodeCount = Math.ceil(fillerKg / electrodeWeightPiece);
+    double fillerCost = fillerKg * electrodePriceKg;
+    return list(fillerKg, fillerCost, passCount, electrodeWeightPiece, electrodeCount,
+        wireEfficiency, electrodeEfficiency, rodEfficiency, fluxWireEfficiency,
+        weldArea, weldVolume, weldWeight, density);
+  }
+
+  @SimpleFunction(description = "GateCraft v3.6 missing-3D calculation with corrected box-length and cylinder/tank radius-derived diameter.")
+  public YailList GeoCalculateMissing3DExactV36(String shape, String target, double knownVolume,
+      double length, double width, double height, double radius, double diameter, double quantity) {
+    final double PI_EXACT = 3.14159d;
+    String s = shape == null ? "" : shape.toLowerCase(java.util.Locale.US);
+    String t = target == null ? "" : target.toLowerCase(java.util.Locale.US);
+    if ("box".equals(s) && "box_length_from_volume".equals(t)) {
+      if (width == 0.0d || height == 0.0d) return list(0.0d,0.0d,0.0d,0.0d,0.0d,0.0d,length,width,height,radius,diameter,"L = V / (W x H)");
+      length = knownVolume / (width * height);
+      double volume = knownVolume * quantity;
+      double surfaceOne = 2.0d * ((length * width) + (length * height) + (width * height));
+      double surface = surfaceOne * quantity;
+      double diagonal = Math.sqrt((width * width) + (height * height) + (length * length));
+      double capacityLiter = volume * 1000.0d;
+      return list(length, volume, surface, diagonal, 0.0d, capacityLiter,
+          length, width, height, radius, diameter, "L = V / (W x H)");
+    }
+    if (("cylinder".equals(s) && "cylinder_radius_from_volume".equals(t)) ||
+        ("tank".equals(s) && "tank_radius_from_volume".equals(t))) {
+      if (height == 0.0d) return list(0.0d,0.0d,0.0d,0.0d,0.0d,0.0d,length,width,height,radius,diameter,"R = sqrt(V / (PI x H))");
+      radius = Math.sqrt(knownVolume / (PI_EXACT * height));
+      diameter = radius * 2.0d;
+      double volume = knownVolume * quantity;
+      double lateralOne = 2.0d * PI_EXACT * radius * height;
+      double surfaceOne = lateralOne + (2.0d * PI_EXACT * radius * radius);
+      double lateralSurface = lateralOne * quantity;
+      double surface = surfaceOne * quantity;
+      double capacityLiter = volume * 1000.0d;
+      return list(radius, volume, surface, 0.0d, lateralSurface, capacityLiter,
+          length, width, height, radius, diameter, "R = sqrt(V / (PI x H))");
+    }
+    return GeoCalculateMissing3DExact(shape, target, knownVolume, length, width, height, radius, diameter, quantity);
+  }
+
+  @SimpleFunction(description = "GateCraft v3.6 StairPro railing estimate. Preserves fields 1..10 and appends actual railing height and calculated baluster gap as fields 11..12.")
+  public YailList StairRailingV36(YailList geometry, YailList landing, boolean useLanding, String side,
+      double heightMm, double maxPostSpacingMm, double postProfileWidthMm, double postPriceM,
+      double handrailPriceM, double bottomExtensionMm, double topExtensionMm, boolean balusterEnabled,
+      double balusterWidthMm, double maxBalusterGapMm, double balusterPriceM, double landingRailLengthMm) {
+    YailList base = StairRailing(geometry, landing, useLanding, side, heightMm, maxPostSpacingMm,
+        postProfileWidthMm, postPriceM, handrailPriceM, bottomExtensionMm, topExtensionMm,
+        balusterEnabled, balusterWidthMm, maxBalusterGapMm, balusterPriceM, landingRailLengthMm);
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    if (base != null) for (int i=0;i<base.size();i++) out.add(base.getObject(i));
+    double actualGap = -1.0d;
+    if (base != null && base.size() >= 6 && balusterEnabled) {
+      double spacing = spListD(base,5,0.0d);
+      double totalBalusters = spListD(base,6,0.0d);
+      int sides = "BOTH".equals(spNorm(side)) ? 2 : 1;
+      double path = spListD(geometry,10,0.0d);
+      if (useLanding && spListB(landing,1,false)) path = spListD(landing,15,path);
+      double section = path + Math.max(0.0d, landingRailLengthMm);
+      int spans = Math.max(1,(int)Math.ceil(section / Math.max(1.0d,maxPostSpacingMm)));
+      int perSpan = (int)Math.round(totalBalusters / Math.max(1, spans * sides));
+      double avail = Math.max(0.0d, spacing - postProfileWidthMm);
+      actualGap = (avail - (perSpan * Math.max(0.0d,balusterWidthMm))) / Math.max(1.0d, perSpan + 1.0d);
+      if (actualGap < 0.0d) actualGap = 0.0d;
+    }
+    out.add(heightMm);
+    out.add(actualGap);
+    return YailList.makeList(out);
+  }
+
+  @SimpleFunction(description = "GateCraft v3.6 StairPro profile check including railing height and actual baluster gap limits.")
+  public YailList StairProfileCheckV36(YailList geometry, YailList landing, YailList railing,
+      double minRiser, double maxRiser, double minGoing, double maxGoing, double minWidth,
+      double maxAngle, double minHeadroom, double minLanding, double minRailingHeight,
+      double maxBalusterGap) {
+    YailList base = StairProfileCheck(geometry, landing, railing, minRiser, maxRiser, minGoing,
+        maxGoing, minWidth, maxAngle, minHeadroom, minLanding, minRailingHeight, maxBalusterGap);
+    java.util.ArrayList<Object> issues = new java.util.ArrayList<Object>();
+    if (base != null && base.size() >= 2 && base.getObject(1) instanceof YailList) {
+      YailList old = (YailList)base.getObject(1);
+      for (int i=0;i<old.size();i++) issues.add(old.getObject(i));
+    }
+    if (railing != null && spListB(railing,1,false)) {
+      double railHeight = spListD(railing,11,0.0d);
+      double actualGap = spListD(railing,12,-1.0d);
+      if (minRailingHeight > 0.0d && railHeight > 0.0d && railHeight < minRailingHeight) issues.add("RAILING_HEIGHT_LOW");
+      if (maxBalusterGap > 0.0d && actualGap >= 0.0d && actualGap > maxBalusterGap) issues.add("RAILING_GAP_HIGH");
+    }
+    return list(issues.isEmpty()?"PASS_PRELIMINARY":"FAIL_PRELIMINARY", YailList.makeList(issues));
+  }
+
+  @SimpleFunction(description = "GateCraft v3.6 StairPro step coordinate display honoring mm/inch unit selection.")
+  public YailList StairStepDisplayV36(YailList steps, String unit) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    String u = unit == null ? "mm" : unit.trim().toLowerCase(java.util.Locale.US);
+    boolean inch = "inch".equals(u) || "in".equals(u);
+    double factor = inch ? (1.0d / 25.4d) : 1.0d;
+    String suffix = inch ? "in" : "mm";
+    int decimals = inch ? 2 : 1;
+    if (steps != null) for (int i=0;i<steps.size();i++) {
+      java.util.ArrayList<Object> a = mdList(steps.getObject(i));
+      if (a.size() >= 3) out.add(String.valueOf(spI(a.get(0),i+1)) + ". | X: " +
+          spRound(spD(a.get(1),0)*factor,decimals) + " " + suffix + " | Z: " +
+          spRound(spD(a.get(2),0)*factor,decimals) + " " + suffix);
+    }
+    return YailList.makeList(out);
+  }
