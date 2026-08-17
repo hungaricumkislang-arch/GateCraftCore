@@ -1,0 +1,18 @@
+  // GateCraft v3.9 memory fix: prevent App Inventor ButtonBase from generating a shaped ARGB bitmap per themed button.
+  // No navigation/calculation/data-flow changes.
+  private void gcV39PrepareBitmapSafeButtons() {
+    if (form == null) return;
+    String screen = form.getClass().getSimpleName();
+    if (!("Screen_ElectroPro".equals(screen)
+        || "Screen_LepcsoPro".equals(screen)
+        || "Screen_MuszakiSeged".equals(screen)
+        || "Screen_MotorDiag".equals(screen)
+        || "Screen_EngineeringLab".equals(screen))) return;
+    java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+    for (java.util.Map.Entry<String,Object> e : map.entrySet()) {
+      Object c = e.getValue();
+      if (c instanceof com.google.appinventor.components.runtime.Button) {
+        try { gcSetProperty(c, "Shape", Integer.valueOf(0)); } catch (Throwable ignored) { }
+      }
+    }
+  }
