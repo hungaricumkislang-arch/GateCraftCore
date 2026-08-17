@@ -96,15 +96,12 @@ jobs:
           echo "AIX dependency jars:"
           ls -lh buildbilling/lib/deps
 
-      - name: Remove desktop Java module metadata unsupported by Android dx
+      - name: Remove desktop Java module metadata
         run: |
           set -euxo pipefail
           for j in buildbilling/lib/deps/*.jar; do
             zip -q -d "$j" 'META-INF/versions/*' 'module-info.class' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.DSA' 2>/dev/null || true
           done
-          if grep -RIl --include='*.jar' 'module-info' buildbilling/lib/deps >/dev/null 2>&1; then
-            true
-          fi
 
       - name: Inject @UsesLibraries dependency list
         run: |
@@ -122,28 +119,62 @@ jobs:
           print('UsesLibraries:', libs)
           PY
 
-      - name: Set up Java 8 for MIT extension build
+      - name: Set up Java 8 for App Inventor metadata and JAR build
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '8'
 
-      - name: Build AIX with MIT extension template
+      - name: Build App Inventor extension metadata and merged runtime JAR
         run: |
           cd buildbilling
           java -version
-          ant clean extensions
+          ant clean jarAllExtensions
+          test -f build/externalComponents-classes/com.gatecraft.billing.jar
+          test -f build/externalComponents/com.gatecraft.billing/files/AndroidRuntime.jar
+
+      - name: Set up Java 17 for D8
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Dex merged extension with Android D8 and package AIX
+        run: |
+          set -euxo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          D8="$(find "$SDK/build-tools" -maxdepth 2 -type f -name d8 | sort -V | tail -1)"
+          ANDROID_JAR="$(find "$SDK/platforms" -maxdepth 2 -type f -name android.jar | sort -V | tail -1)"
+          test -n "$D8"
+          test -x "$D8"
+          test -f "$ANDROID_JAR"
+          echo "D8=$D8"
+          echo "ANDROID_JAR=$ANDROID_JAR"
+          rm -rf /tmp/gcb-d8
+          mkdir -p /tmp/gcb-d8
+          "$D8" --min-api 21 --lib "$ANDROID_JAR" --output /tmp/gcb-d8 \
+            buildbilling/build/externalComponents-classes/com.gatecraft.billing.jar
+          test -f /tmp/gcb-d8/classes.dex
+          rm -f buildbilling/build/externalComponents/com.gatecraft.billing/classes.jar
+          (cd /tmp/gcb-d8 && zip -q "$GITHUB_WORKSPACE/buildbilling/build/externalComponents/com.gatecraft.billing/classes.jar" classes.dex)
+          unzip -t buildbilling/build/externalComponents/com.gatecraft.billing/classes.jar
+          mkdir -p buildbilling/out
+          rm -f buildbilling/out/com.gatecraft.billing.aix
+          (cd buildbilling/build/externalComponents && zip -qr "$GITHUB_WORKSPACE/buildbilling/out/com.gatecraft.billing.aix" com.gatecraft.billing)
 
       - name: Inspect AIX
         run: |
           set -eux
-          find buildbilling/out -maxdepth 2 -type f -print
-          unzip -l buildbilling/out/*.aix | sed -n '1,200p'
-          unzip -t buildbilling/out/*.aix
+          test -f buildbilling/out/com.gatecraft.billing.aix
+          unzip -l buildbilling/out/com.gatecraft.billing.aix | sed -n '1,240p'
+          unzip -t buildbilling/out/com.gatecraft.billing.aix
+          unzip -p buildbilling/out/com.gatecraft.billing.aix com.gatecraft.billing/classes.jar > /tmp/classes.jar
+          unzip -t /tmp/classes.jar
+          unzip -l /tmp/classes.jar
 
       - name: Upload GateCraftBilling AIX
         uses: actions/upload-artifact@v4
         with:
           name: GateCraftBilling-v1-aix
-          path: buildbilling/out/*.aix
+          path: buildbilling/out/com.gatecraft.billing.aix
           if-no-files-found: error
