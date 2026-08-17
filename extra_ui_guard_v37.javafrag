@@ -1,0 +1,292 @@
+  // ------------------------------------------------------------------
+  // GateCraft v3.7 runtime UI guard
+  // IMPORTANT: solves Screen1/modern-screen UI defects without changing BKY.
+  // No calculation, data-flow or Cutting Optimizer logic is touched here.
+  // ------------------------------------------------------------------
+
+  private android.os.Handler gcV37Handler;
+  private boolean gcV37GuardInstalled = false;
+  private boolean gcV37Applying = false;
+  private boolean gcV37Screen1StateReady = false;
+  private boolean gcV37PrevProfile = false;
+  private boolean gcV37PrevBackup = false;
+  private boolean gcV37PrevProject = false;
+  private boolean gcV37PrevBusiness = false;
+  private boolean gcV37PrevModuleClear = false;
+  private boolean gcV37LabNavigated = false;
+  private android.view.ViewTreeObserver.OnGlobalLayoutListener gcV37LayoutListener;
+
+  {
+    try {
+      gcV37Handler = new android.os.Handler(android.os.Looper.getMainLooper());
+      gcV37Handler.postDelayed(new java.lang.Runnable() {
+        private int tries = 0;
+        @Override public void run() {
+          try {
+            if (gcV37InstallGuard()) return;
+          } catch (Throwable ignored) { }
+          tries++;
+          if (tries < 20 && gcV37Handler != null) gcV37Handler.postDelayed(this, 250L);
+        }
+      }, 300L);
+    } catch (Throwable ignored) { }
+  }
+
+  private boolean gcV37TargetScreen(String screen) {
+    return "Screen1".equals(screen) || "Screen_ElectroPro".equals(screen)
+        || "Screen_LepcsoPro".equals(screen) || "Screen_MuszakiSeged".equals(screen)
+        || "Screen_MotorDiag".equals(screen) || "Screen_EngineeringLab".equals(screen);
+  }
+
+  private boolean gcV37InstallGuard() {
+    if (gcV37GuardInstalled) return true;
+    if (form == null) return false;
+    final String screen = form.getClass().getSimpleName();
+    if (!gcV37TargetScreen(screen)) {
+      gcV37GuardInstalled = true;
+      return true;
+    }
+    android.app.Activity activity = (android.app.Activity) form;
+    final android.view.View root = activity.getWindow() == null ? null : activity.getWindow().getDecorView();
+    if (root == null) return false;
+
+    gcV37LayoutListener = new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+      @Override public void onGlobalLayout() {
+        gcV37ApplyCurrentScreenSafe();
+      }
+    };
+    android.view.ViewTreeObserver obs = root.getViewTreeObserver();
+    if (obs == null || !obs.isAlive()) return false;
+    obs.addOnGlobalLayoutListener(gcV37LayoutListener);
+    gcV37GuardInstalled = true;
+    gcV37ApplyCurrentScreenSafe();
+    if (gcV37Handler != null) {
+      gcV37Handler.postDelayed(new java.lang.Runnable() {
+        @Override public void run() { gcV37ApplyCurrentScreenSafe(); }
+      }, 700L);
+      gcV37Handler.postDelayed(new java.lang.Runnable() {
+        @Override public void run() { gcV37ApplyCurrentScreenSafe(); }
+      }, 1600L);
+    }
+    return true;
+  }
+
+  private void gcV37ApplyCurrentScreenSafe() {
+    if (gcV37Applying || form == null) return;
+    gcV37Applying = true;
+    try {
+      String screen = form.getClass().getSimpleName();
+      java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+      if ("Screen1".equals(screen)) gcV37ApplyScreen1(map);
+      else if ("Screen_EngineeringLab".equals(screen)) gcV37ApplyEngineeringLab(map);
+      else if ("Screen_ElectroPro".equals(screen) || "Screen_LepcsoPro".equals(screen)
+          || "Screen_MuszakiSeged".equals(screen) || "Screen_MotorDiag".equals(screen)) {
+        gcV37ApplyModernHeader(map, screen);
+      }
+    } catch (Throwable ignored) { }
+    gcV37Applying = false;
+  }
+
+  private boolean gcV37Visible(java.util.HashMap<String,Object> map, String name) {
+    Object c = map.get(name);
+    if (c == null) return false;
+    Object v = gcPlatformGetProperty(c, "Visible", Boolean.FALSE);
+    if (v instanceof Boolean) return ((Boolean)v).booleanValue();
+    return "true".equalsIgnoreCase(String.valueOf(v));
+  }
+
+  private void gcV37Set(java.util.HashMap<String,Object> map, String name, String property, Object value) {
+    Object c = map.get(name);
+    if (c == null) return;
+    try {
+      Object current = gcPlatformGetProperty(c, property, null);
+      if (current != null && value != null && String.valueOf(current).equals(String.valueOf(value))) return;
+      gcSetProperty(c, property, value);
+    } catch (Throwable ignored) { }
+  }
+
+  private void gcV37SetVisible(java.util.HashMap<String,Object> map, String name, boolean visible) {
+    gcV37Set(map, name, "Visible", Boolean.valueOf(visible));
+  }
+
+  private String gcV37Theme() {
+    return gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default")
+        .trim().toLowerCase(java.util.Locale.ROOT);
+  }
+
+  private void gcV37NormalButton(java.util.HashMap<String,Object> map, String name, String theme) {
+    gcV37Set(map, name, "Image", gcV34ButtonImage(theme));
+    gcV37Set(map, name, "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map, name, "TextColor", Integer.valueOf(gcV35ButtonText(theme)));
+  }
+
+  private void gcV37BackButton(java.util.HashMap<String,Object> map, String name, String theme) {
+    gcV37Set(map, name, "Image", gcV35BackImage(theme));
+    gcV37Set(map, name, "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map, name, "Text", "‹");
+    gcV37Set(map, name, "TextColor", Integer.valueOf(gcV35ButtonText(theme)));
+    gcV37Set(map, name, "Width", Integer.valueOf(-1015));
+  }
+
+  private String gcV37CenterText(String key, int lang) {
+    int l = lang < 1 || lang > 12 ? 2 : lang;
+    String[][] rows = new String[][]{
+      {"TITLE","GateCraft Központ","GateCraft Center","GateCraft-Zentrale","Centro GateCraft","Centre GateCraft","GateCraft 中心","Centro GateCraft","Centro GateCraft","Centrum GateCraft","GateCraft-centrum","Centrul GateCraft","Центр GateCraft"},
+      {"LAB","Mérnöki labor (kísérleti)","Engineering Lab (Experimental)","Engineering-Labor (experimentell)","Laboratorio de ingeniería (experimental)","Laboratoire d’ingénierie (expérimental)","工程实验室（实验性）","Laboratorio tecnico (sperimentale)","Laboratório de engenharia (experimental)","Laboratorium inżynierskie (eksperymentalne)","Engineering Lab (experimenteel)","Laborator de inginerie (experimental)","Инженерная лаборатория (экспериментальная)"}
+    };
+    for (String[] r : rows) if (r[0].equals(key)) return r[l];
+    return key;
+  }
+
+  private void gcV37ApplyScreen1(java.util.HashMap<String,Object> map) {
+    String theme = gcV37Theme();
+    int normalText = gcV34NormalText(theme);
+    int lang = (int)Math.round(PlatformLanguagePreference());
+    if (lang < 1 || lang > 12) lang = 2;
+
+    gcV37Set(map, "LBL_GATECRAFT_CENTER_TOP", "Height", Integer.valueOf(-1015));
+    gcV37Set(map, "LBL_BUS_TOP", "Height", Integer.valueOf(-1015));
+    gcV37Set(map, "LBL_BACKUP_TOP", "Height", Integer.valueOf(-1015));
+    gcV37Set(map, "LBL_PROFILE_TOP", "Height", Integer.valueOf(-1015));
+    gcV37Set(map, "LBL_PROJECT_TOP_GAP", "Height", Integer.valueOf(-1015));
+
+    gcV37Set(map, "HA_GATECRAFT_CENTER_HEADER", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map, "LBL_GATECRAFT_CENTER_TITLE", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map, "LBL_GATECRAFT_CENTER_TITLE", "TextColor", Integer.valueOf(normalText));
+    gcV37Set(map, "LBL_GATECRAFT_CENTER_TITLE", "Text", gcV37CenterText("TITLE", lang));
+
+    gcV37Set(map, "HA_PROJECT_HEADER", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map, "LBL_PROJECT_TITLE", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map, "LBL_PROJECT_TITLE", "TextColor", Integer.valueOf(normalText));
+
+    gcV37NormalButton(map, "BTN_PROJECT_OPEN", theme);
+    gcV37NormalButton(map, "BTN_PROFILE_OPEN", theme);
+    gcV37NormalButton(map, "BTN_BACKUP_OPEN", theme);
+    gcV37NormalButton(map, "BTN_BUS_OPEN", theme);
+    gcV37NormalButton(map, "BTN_GATECRAFT_CENTER_LAB_OPEN", theme);
+    gcV37NormalButton(map, "BTN_GATECRAFT_CENTER_BACK", theme);
+    gcV37Set(map, "BTN_PROJECT_OPEN", "Text", gcProjectUiText("TITLE", lang));
+    gcV37Set(map, "BTN_PROFILE_OPEN", "Text", gcPlatformText("PROFILE_TITLE", lang));
+    gcV37Set(map, "BTN_BACKUP_OPEN", "Text", BackupUiText("OPEN", lang));
+    gcV37Set(map, "BTN_BUS_OPEN", "Text", gcBusText("TITLE", lang));
+    gcV37Set(map, "BTN_GATECRAFT_CENTER_LAB_OPEN", "Text", gcV37CenterText("LAB", lang));
+    gcV37Set(map, "BTN_GATECRAFT_CENTER_BACK", "Text", gcProjectUiText("BACK", lang));
+
+    gcV37NormalButton(map, "BTN_PROFILE_BACK", theme);
+    gcV37NormalButton(map, "BTN_BACKUP_BACK", theme);
+    gcV37NormalButton(map, "BTN_PROJECT_BACK", theme);
+    gcV37NormalButton(map, "BTN_BUS_BACK", theme);
+
+    boolean profile = gcV37Visible(map, "VA_PROFILE");
+    boolean backup = gcV37Visible(map, "VA_BACKUP");
+    boolean project = gcV37Visible(map, "VA_PROJECT_HUB");
+    boolean business = gcV37Visible(map, "VA_BUSINESS");
+    boolean moduleClear = gcV37Visible(map, "VA_MODULE_CLEAR");
+
+    if (moduleClear) gcV37SetVisible(map, "VA_UJ_ALSOPANEL", false);
+
+    if (!gcV37Screen1StateReady) {
+      gcV37PrevProfile = profile;
+      gcV37PrevBackup = backup;
+      gcV37PrevProject = project;
+      gcV37PrevBusiness = business;
+      gcV37PrevModuleClear = moduleClear;
+      gcV37Screen1StateReady = true;
+    } else {
+      if ((gcV37PrevProfile && !profile) || (gcV37PrevBackup && !backup)
+          || (gcV37PrevProject && !project) || (gcV37PrevBusiness && !business)) {
+        gcV37ScheduleReturnHome();
+      }
+      if (gcV37PrevModuleClear && !moduleClear) gcV37ScheduleModuleClearReturn();
+      gcV37PrevProfile = profile;
+      gcV37PrevBackup = backup;
+      gcV37PrevProject = project;
+      gcV37PrevBusiness = business;
+      gcV37PrevModuleClear = moduleClear;
+    }
+  }
+
+  private void gcV37ScheduleReturnHome() {
+    if (gcV37Handler == null) return;
+    gcV37Handler.postDelayed(new java.lang.Runnable() {
+      @Override public void run() {
+        if (form == null || !"Screen1".equals(form.getClass().getSimpleName())) return;
+        java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+        boolean any = gcV37Visible(map,"VA_PROFILE") || gcV37Visible(map,"VA_BACKUP")
+            || gcV37Visible(map,"VA_PROJECT_HUB") || gcV37Visible(map,"VA_BUSINESS")
+            || gcV37Visible(map,"VA_GATECRAFT_CENTER") || gcV37Visible(map,"VA_MODULE_CLEAR");
+        if (!any && gcV37Visible(map,"beallitasvertikal")) {
+          gcV37SetVisible(map,"beallitasvertikal",false);
+          gcV37SetVisible(map,"VA_UJ_FO",true);
+          gcV37SetVisible(map,"VA_UJ_ALSOPANEL",true);
+        }
+      }
+    }, 100L);
+  }
+
+  private void gcV37ScheduleModuleClearReturn() {
+    if (gcV37Handler == null) return;
+    gcV37Handler.postDelayed(new java.lang.Runnable() {
+      @Override public void run() {
+        if (form == null || !"Screen1".equals(form.getClass().getSimpleName())) return;
+        java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+        if (gcV37Visible(map,"beallitasvertikal") && !gcV37Visible(map,"VA_MODULE_CLEAR")) {
+          gcV37SetVisible(map,"VA_UJ_ALSOPANEL",true);
+        }
+      }
+    }, 100L);
+  }
+
+  private void gcV37ApplyModernHeader(java.util.HashMap<String,Object> map, String screen) {
+    String theme = gcV37Theme();
+    boolean forge = "marka2".equals(theme);
+    int headerBg = forge ? 0xFF181818 : 0xFFFFFFFF;
+    int headerText = forge ? 0xFFFFFFFF : 0xFF000000;
+    String header = "";
+    String back = "";
+    String title = "";
+    String mini = "";
+    if ("Screen_ElectroPro".equals(screen)) {
+      header="HA_EP_HEADER"; back="BTN_EP_BACK"; title="LBL_EP_PAGETITLE";
+    } else if ("Screen_LepcsoPro".equals(screen)) {
+      header="HA_SP_HEADER"; back="BTN_SP_BACK"; title="LBL_SP_PAGETITLE";
+    } else if ("Screen_MuszakiSeged".equals(screen)) {
+      header="HA_TG_HEADER"; back="BTN_TG_BACK"; title="LBL_TG_PAGETITLE"; mini="LBL_TG_CONTEXTMINI";
+    } else if ("Screen_MotorDiag".equals(screen)) {
+      header="HA_MD_HEADER"; back="BTN_MD_BACK"; title="LBL_MD_PAGETITLE"; mini="LBL_MD_CONTROLLERMINI";
+    }
+    gcV37Set(map,header,"BackgroundColor",Integer.valueOf(headerBg));
+    gcV37Set(map,title,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map,title,"TextColor",Integer.valueOf(headerText));
+    if (mini.length()>0) {
+      gcV37Set(map,mini,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
+      gcV37Set(map,mini,"TextColor",Integer.valueOf(headerText));
+    }
+    gcV37BackButton(map,back,theme);
+  }
+
+  private void gcV37ApplyEngineeringLab(java.util.HashMap<String,Object> map) {
+    String theme = gcV37Theme();
+    boolean forge = "marka2".equals(theme);
+    int headerBg = forge ? 0xFF181818 : 0xFFFFFFFF;
+    int headerText = forge ? 0xFFFFFFFF : 0xFF000000;
+    gcV37Set(map,"HA_EL_HEADER","BackgroundColor",Integer.valueOf(headerBg));
+    gcV37Set(map,"LBL_EL_TITLE","BackgroundColor",Integer.valueOf(0x00FFFFFF));
+    gcV37Set(map,"LBL_EL_TITLE","TextColor",Integer.valueOf(headerText));
+    gcV37BackButton(map,"BTN_EL_BACK",theme);
+
+    if (!gcV37LabNavigated) {
+      Object web = map.get("WV_ENGINEERING_LAB");
+      if (web != null) {
+        int lang = (int)Math.round(PlatformLanguagePreference());
+        if (lang < 1 || lang > 12) lang = 2;
+        try {
+          String url = "http://localhost/gatecraft_engineering_lab.html?theme="
+              + java.net.URLEncoder.encode(theme,"UTF-8") + "&lang=" + lang;
+          java.lang.reflect.Method m = web.getClass().getMethod("GoToUrl", String.class);
+          m.invoke(web, url);
+          gcV37LabNavigated = true;
+        } catch (Throwable ignored) { }
+      }
+    }
+  }
