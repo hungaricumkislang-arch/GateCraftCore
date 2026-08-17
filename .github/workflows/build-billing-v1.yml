@@ -15,16 +15,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 8
-        uses: actions/setup-java@v4
+      - name: Set up Java 17 for Gradle dependency resolution
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '8'
+          java-version: '17'
 
-      - name: Install build tools
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Install App Inventor build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ant maven unzip
+          sudo apt-get install -y ant unzip
 
       - name: Clone official MIT App Inventor extension template
         run: |
@@ -33,42 +38,29 @@ jobs:
           mkdir -p buildbilling/src/com/gatecraft/billing
           cp billing/GateCraftBilling.java buildbilling/src/com/gatecraft/billing/GateCraftBilling.java
 
-      - name: Resolve Play Billing 9.1.0 runtime dependencies
+      - name: Resolve Play Billing 9.1.0 runtime dependencies with Gradle
         run: |
-          cat > /tmp/gcb-pom.xml <<'EOF'
-          <project xmlns="http://maven.apache.org/POM/4.0.0"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-            <modelVersion>4.0.0</modelVersion>
-            <groupId>com.gatecraft</groupId>
-            <artifactId>billing-resolver</artifactId>
-            <version>1.0</version>
-            <repositories>
-              <repository>
-                <id>google</id>
-                <url>https://maven.google.com</url>
-              </repository>
-              <repository>
-                <id>central</id>
-                <url>https://repo1.maven.org/maven2</url>
-              </repository>
-            </repositories>
-            <dependencies>
-              <dependency>
-                <groupId>com.android.billingclient</groupId>
-                <artifactId>billing</artifactId>
-                <version>9.1.0</version>
-                <type>aar</type>
-              </dependency>
-            </dependencies>
-          </project>
+          cat > buildbilling/billing-deps.gradle <<'EOF'
+          repositories {
+            google()
+            mavenCentral()
+          }
+          configurations {
+            billingRuntime
+          }
+          dependencies {
+            billingRuntime 'com.android.billingclient:billing:9.1.0'
+          }
+          tasks.register('copyBillingDeps', Copy) {
+            from configurations.billingRuntime
+            into layout.projectDirectory.dir('depsraw')
+          }
           EOF
-          mkdir -p buildbilling/depsraw
-          mvn -q -f /tmp/gcb-pom.xml dependency:copy-dependencies \
-            -DincludeScope=runtime \
-            -DoutputDirectory="$GITHUB_WORKSPACE/buildbilling/depsraw"
+          cd buildbilling
+          rm -rf depsraw
+          gradle --no-daemon -b billing-deps.gradle copyBillingDeps
           echo "Resolved artifacts:"
-          find buildbilling/depsraw -maxdepth 1 -type f -printf '%f\n' | sort
+          find depsraw -maxdepth 1 -type f -printf '%f\n' | sort
 
       - name: Convert AAR dependencies to extension JAR dependencies
         run: |
@@ -117,16 +109,23 @@ jobs:
           print('UsesLibraries:', libs)
           PY
 
+      - name: Set up Java 8 for MIT extension build
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '8'
+
       - name: Build AIX with MIT extension template
         run: |
           cd buildbilling
+          java -version
           ant clean extensions
 
       - name: Inspect AIX
         run: |
           set -eux
           find buildbilling/out -maxdepth 2 -type f -print
-          unzip -l buildbilling/out/*.aix | sed -n '1,160p'
+          unzip -l buildbilling/out/*.aix | sed -n '1,200p'
           unzip -t buildbilling/out/*.aix
 
       - name: Upload GateCraftBilling AIX
