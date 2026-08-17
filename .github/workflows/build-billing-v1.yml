@@ -40,7 +40,10 @@ jobs:
 
       - name: Resolve Play Billing 9.1.0 runtime dependencies with Gradle
         run: |
-          cat > buildbilling/billing-deps.gradle <<'EOF'
+          cat > buildbilling/settings.gradle <<'EOF'
+          rootProject.name = 'gatecraft-billing-deps'
+          EOF
+          cat > buildbilling/build.gradle <<'EOF'
           repositories {
             google()
             mavenCentral()
@@ -58,7 +61,7 @@ jobs:
           EOF
           cd buildbilling
           rm -rf depsraw
-          gradle --no-daemon -b billing-deps.gradle copyBillingDeps
+          gradle --no-daemon copyBillingDeps
           echo "Resolved artifacts:"
           find depsraw -maxdepth 1 -type f -printf '%f\n' | sort
 
