@@ -1,0 +1,83 @@
+# GateCraftCore AIX build workflow v37 final - BKY-safe UI runtime fixes
+name: Build GateCraftCore v3.7 Final AIX
+
+on:
+  push:
+    branches: [ gatecraft-ui-runtime-v37 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GateCraftCore
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant
+
+      - name: Get official MIT App Inventor extension template
+        run: |
+          git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+
+      - name: Restore GateCraftCore v1 source bundle
+        run: |
+          rm -rf buildenv/src/*
+          cat source_bundle/part*.txt | base64 --decode > /tmp/gatecraftcore-src.tar.gz
+          tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
+
+      - name: Inject GateCraftCore v3.7 final helpers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          matches = list(Path('buildenv/src').rglob('GateCraftCore.java'))
+          if len(matches) != 1:
+              raise SystemExit('Expected exactly one GateCraftCore.java, found %d' % len(matches))
+          p = matches[0]
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('version = 10', 'version = 37', 1)
+          s = s.replace('return "1.0.0";', 'return "3.7.0";', 1)
+          fragments = []
+          for fp in [
+              'extra_methods.javafrag', 'extra_names.javafrag', 'extra_algorithms.javafrag',
+              'extra_railing.javafrag', 'extra_welding.javafrag', 'extra_defaults.javafrag',
+              'extra_geo_missing3d.javafrag', 'extra_batch.javafrag', 'extra_lang_asset.javafrag',
+              'extra_static_asset.javafrag', 'extra_textops_asset.javafrag', 'extra_langplan_asset.javafrag',
+              'extra_motordiag.javafrag', 'extra_motordiag_userdata.javafrag', 'extra_motordiag_lang.javafrag',
+              'extra_techguide.javafrag', 'extra_techguide_display.javafrag', 'extra_stairpro.javafrag',
+              'extra_stairpro_display.javafrag', 'extra_namedbatch.javafrag', 'extra_platform.javafrag',
+              'extra_backup.javafrag', 'extra_backup_lang.javafrag', 'extra_backup_ui.javafrag',
+              'extra_v33_ui.javafrag', 'extra_techguide_v2.javafrag', 'extra_projecthub.javafrag',
+              'extra_v33_runtime.javafrag', 'extra_v33_screen1_lang.javafrag',
+              'extra_business.javafrag', 'extra_calcfix_v36.javafrag', 'extra_ui_guard_v37.javafrag',
+              'extra_ui_guard_v37_returnfix.javafrag']:
+              fragments.append(Path(fp).read_text(encoding='utf-8'))
+          pos = s.rfind('}')
+          if pos < 0:
+              raise SystemExit('Could not locate class closing brace')
+          p.write_text(s[:pos] + '\n' + '\n'.join(fragments) + '\n' + s[pos:], encoding='utf-8')
+          PY
+
+      - name: Build AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+
+      - name: Upload AIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftCore-v3.7-final-aix
+          path: buildenv/out/*.aix
+          if-no-files-found: error
