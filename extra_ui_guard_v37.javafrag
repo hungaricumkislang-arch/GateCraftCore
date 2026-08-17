@@ -144,21 +144,25 @@
     int lang = (int)Math.round(PlatformLanguagePreference());
     if (lang < 1 || lang > 12) lang = 2;
 
+    // Requested 15% top spacers. Designer values are kept too; runtime enforces them.
     gcV37Set(map, "LBL_GATECRAFT_CENTER_TOP", "Height", Integer.valueOf(-1015));
     gcV37Set(map, "LBL_BUS_TOP", "Height", Integer.valueOf(-1015));
     gcV37Set(map, "LBL_BACKUP_TOP", "Height", Integer.valueOf(-1015));
     gcV37Set(map, "LBL_PROFILE_TOP", "Height", Integer.valueOf(-1015));
     gcV37Set(map, "LBL_PROJECT_TOP_GAP", "Height", Integer.valueOf(-1015));
 
+    // GateCraft Center title is a plain themed label, not a separate header surface.
     gcV37Set(map, "HA_GATECRAFT_CENTER_HEADER", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
     gcV37Set(map, "LBL_GATECRAFT_CENTER_TITLE", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
     gcV37Set(map, "LBL_GATECRAFT_CENTER_TITLE", "TextColor", Integer.valueOf(normalText));
     gcV37Set(map, "LBL_GATECRAFT_CENTER_TITLE", "Text", gcV37CenterText("TITLE", lang));
 
+    // Project Center title follows the same plain-label rule.
     gcV37Set(map, "HA_PROJECT_HEADER", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
     gcV37Set(map, "LBL_PROJECT_TITLE", "BackgroundColor", Integer.valueOf(0x00FFFFFF));
     gcV37Set(map, "LBL_PROJECT_TITLE", "TextColor", Integer.valueOf(normalText));
 
+    // Center buttons use the real GateCraft button image for the current theme.
     gcV37NormalButton(map, "BTN_PROJECT_OPEN", theme);
     gcV37NormalButton(map, "BTN_PROFILE_OPEN", theme);
     gcV37NormalButton(map, "BTN_BACKUP_OPEN", theme);
@@ -172,6 +176,7 @@
     gcV37Set(map, "BTN_GATECRAFT_CENTER_LAB_OPEN", "Text", gcV37CenterText("LAB", lang));
     gcV37Set(map, "BTN_GATECRAFT_CENTER_BACK", "Text", gcProjectUiText("BACK", lang));
 
+    // Profile/Backup/Project/Business Back buttons are NORMAL themed buttons by request.
     gcV37NormalButton(map, "BTN_PROFILE_BACK", theme);
     gcV37NormalButton(map, "BTN_BACKUP_BACK", theme);
     gcV37NormalButton(map, "BTN_PROJECT_BACK", theme);
@@ -183,6 +188,7 @@
     boolean business = gcV37Visible(map, "VA_BUSINESS");
     boolean moduleClear = gcV37Visible(map, "VA_MODULE_CLEAR");
 
+    // Calculation-data deletion page must never show the bottom panel underneath it.
     if (moduleClear) gcV37SetVisible(map, "VA_UJ_ALSOPANEL", false);
 
     if (!gcV37Screen1StateReady) {
@@ -247,13 +253,13 @@
     String title = "";
     String mini = "";
     if ("Screen_ElectroPro".equals(screen)) {
-      header="HA_EP_HEADER"; back="BTN_EP_BACK"; title="LBL_EP_PAGETITLE";
+      header="HA_EP_Header"; back="BTN_EP_Back"; title="LBL_EP_PageTitle";
     } else if ("Screen_LepcsoPro".equals(screen)) {
-      header="HA_SP_HEADER"; back="BTN_SP_BACK"; title="LBL_SP_PAGETITLE";
+      header="HA_SP_Header"; back="BTN_SP_Back"; title="LBL_SP_PageTitle";
     } else if ("Screen_MuszakiSeged".equals(screen)) {
-      header="HA_TG_HEADER"; back="BTN_TG_BACK"; title="LBL_TG_PAGETITLE"; mini="LBL_TG_CONTEXTMINI";
+      header="HA_TG_Header"; back="BTN_TG_Back"; title="LBL_TG_PageTitle"; mini="LBL_TG_ContextMini";
     } else if ("Screen_MotorDiag".equals(screen)) {
-      header="HA_MD_HEADER"; back="BTN_MD_BACK"; title="LBL_MD_PAGETITLE"; mini="LBL_MD_CONTROLLERMINI";
+      header="HA_MD_Header"; back="BTN_MD_Back"; title="LBL_MD_PageTitle"; mini="LBL_MD_ControllerMini";
     }
     gcV37Set(map,header,"BackgroundColor",Integer.valueOf(headerBg));
     gcV37Set(map,title,"BackgroundColor",Integer.valueOf(0x00FFFFFF));
