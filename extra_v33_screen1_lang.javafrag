@@ -1,7 +1,7 @@
   // ------------------------------------------------------------------
-  // Screen1 v3.3 additions - real 12-language labels
+  // Screen1 v3.8 additions - real 12-language labels
   // ------------------------------------------------------------------
-  @SimpleFunction(description = "Applies localized 12-language text to the new Screen1 layout selector and Project Center entry.")
+  @SimpleFunction(description = "Applies localized 12-language text to Screen1 modern entries and compatibility controls.")
   public void PlatformApplyScreen1V33Texts() {
     int lang=(int)Math.round(PlatformLanguagePreference()); if(lang<1||lang>12)lang=2;
     java.util.HashMap<String,Object> map=gcBuildNamedComponentMap();
@@ -16,4 +16,5 @@
       int li="COMPACT".equals(lc)?2:("TOUCH".equals(lc)?3:("DENSE".equals(lc)?4:1));
       gcSetProperty(layout,"SelectionIndex",Integer.valueOf(li));
     }
+    gcV38ApplyScreen1Texts();
   }
