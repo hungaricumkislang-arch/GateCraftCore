@@ -41,9 +41,20 @@ jobs:
       - name: Resolve Play Billing 9.1.0 runtime dependencies with Gradle
         run: |
           cat > buildbilling/settings.gradle <<'EOF'
+          pluginManagement {
+            repositories {
+              gradlePluginPortal()
+              google()
+              mavenCentral()
+            }
+          }
           rootProject.name = 'gatecraft-billing-deps'
           EOF
           cat > buildbilling/build.gradle <<'EOF'
+          plugins {
+            id 'java'
+            id 'com.github.johnrengelman.shadow' version '8.1.1'
+          }
           repositories {
             google()
             mavenCentral()
@@ -57,6 +68,27 @@ jobs:
           tasks.register('copyBillingDeps', Copy) {
             from configurations.billingRuntime
             into layout.projectDirectory.dir('depsraw')
+          }
+          tasks.register('shadeBilling', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+            archiveFileName = 'GateCraftBilling-shaded.jar'
+            destinationDirectory = layout.buildDirectory.dir('shaded')
+            from { zipTree(file('build/externalComponents-classes/com.gatecraft.billing.jar')) }
+            configurations = []
+            relocate 'com.android.billingclient', 'com.gatecraft.billing.repack.billingclient'
+            relocate 'androidx', 'com.gatecraft.billing.repack.androidx'
+            relocate 'com.google', 'com.gatecraft.billing.repack.google'
+            relocate 'kotlin', 'com.gatecraft.billing.repack.kotlin'
+            relocate 'kotlinx', 'com.gatecraft.billing.repack.kotlinx'
+            relocate 'org.jetbrains', 'com.gatecraft.billing.repack.jetbrains'
+            relocate 'org.intellij', 'com.gatecraft.billing.repack.intellij'
+            relocate 'javax.inject', 'com.gatecraft.billing.repack.javaxinject'
+            relocate 'android.support', 'com.gatecraft.billing.repack.androidsupport'
+            mergeServiceFiles()
+            exclude 'META-INF/versions/**'
+            exclude 'module-info.class'
+            exclude 'META-INF/*.SF'
+            exclude 'META-INF/*.RSA'
+            exclude 'META-INF/*.DSA'
           }
           EOF
           cd buildbilling
@@ -93,17 +125,12 @@ jobs:
                 ;;
             esac
           done
-          echo "AIX dependency jars:"
-          ls -lh buildbilling/lib/deps
-
-      - name: Remove desktop Java module metadata
-        run: |
-          set -euxo pipefail
           for j in buildbilling/lib/deps/*.jar; do
             zip -q -d "$j" 'META-INF/versions/*' 'module-info.class' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.DSA' 2>/dev/null || true
           done
+          ls -lh buildbilling/lib/deps
 
-      - name: Inject @UsesLibraries dependency list
+      - name: Inject App Inventor libraries and Billing manifest metadata
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -115,7 +142,21 @@ jobs:
           s=p.read_text(encoding='utf-8')
           if '__GCB_LIBS__' not in s:
               raise SystemExit('Library placeholder missing')
-          p.write_text(s.replace('__GCB_LIBS__', libs), encoding='utf-8')
+          s=s.replace('__GCB_LIBS__', libs)
+          s=s.replace('import com.google.appinventor.components.annotations.UsesLibraries;\n',
+              'import com.google.appinventor.components.annotations.UsesLibraries;\n'
+              'import com.google.appinventor.components.annotations.UsesActivities;\n'
+              'import com.google.appinventor.components.annotations.UsesApplicationMetadata;\n'
+              'import com.google.appinventor.components.annotations.androidmanifest.ActivityElement;\n'
+              'import com.google.appinventor.components.annotations.androidmanifest.MetaDataElement;\n')
+          s=s.replace('    nonVisible = true,\n    iconName = "")',
+              '    nonVisible = true,\n    iconName = "",\n    androidMinSdk = 21,\n    versionName = "1.0.0-beta1")')
+          marker='@SimpleObject(external = true)'
+          manifest='''@UsesActivities(activities = {\n    @ActivityElement(\n        name = "com.gatecraft.billing.repack.billingclient.api.ProxyBillingActivity",\n        configChanges = "keyboard|keyboardHidden|screenLayout|screenSize|orientation",\n        exported = "false",\n        theme = "@android:style/Theme.Translucent.NoTitleBar"),\n    @ActivityElement(\n        name = "com.gatecraft.billing.repack.billingclient.api.ProxyBillingActivityV2",\n        configChanges = "keyboard|keyboardHidden|screenLayout|screenSize|orientation",\n        exported = "false",\n        theme = "@android:style/Theme.Translucent.NoTitleBar")\n})\n@UsesApplicationMetadata(metaDataElements = {\n    @MetaDataElement(name = "com.google.android.play.billingclient.version", value = "9.1.0")\n})\n@SimpleObject(external = true)'''
+          if marker not in s:
+              raise SystemExit('SimpleObject marker missing')
+          s=s.replace(marker,manifest,1)
+          p.write_text(s, encoding='utf-8')
           print('UsesLibraries:', libs)
           PY
 
@@ -132,45 +173,65 @@ jobs:
           ant clean jarAllExtensions
           test -f build/externalComponents-classes/com.gatecraft.billing.jar
           test -f build/externalComponents/com.gatecraft.billing/files/AndroidRuntime.jar
+          echo 'Generated manifest/build info:'
+          cat build/externalComponents/com.gatecraft.billing/files/component_build_info.json || true
 
-      - name: Set up Java 17 for D8
+      - name: Set up Java 17 for shading and D8
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Dex merged extension with Android D8 and package AIX
+      - name: Shade all Billing dependencies into private namespace
+        run: |
+          set -euxo pipefail
+          cd buildbilling
+          gradle --no-daemon shadeBilling
+          test -f build/shaded/GateCraftBilling-shaded.jar
+          cp build/shaded/GateCraftBilling-shaded.jar build/externalComponents/com.gatecraft.billing/files/AndroidRuntime.jar
+          echo 'Unrelocated third-party classes remaining:'
+          jar tf build/shaded/GateCraftBilling-shaded.jar | grep -E '^(androidx/|kotlin/|kotlinx/|com/android/billingclient/|com/google/|org/jetbrains/|org/intellij/|javax/inject/|android/support/)' || true
+          echo 'Required kept component:'
+          jar tf build/shaded/GateCraftBilling-shaded.jar | grep '^com/gatecraft/billing/GateCraftBilling.class$'
+          echo 'Required relocated proxy activities:'
+          jar tf build/shaded/GateCraftBilling-shaded.jar | grep 'com/gatecraft/billing/repack/billingclient/api/ProxyBillingActivity'
+
+      - name: Dex shaded extension with Android D8 and package AIX
         run: |
           set -euxo pipefail
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           D8="$(find "$SDK/build-tools" -maxdepth 2 -type f -name d8 | sort -V | tail -1)"
           ANDROID_JAR="$(find "$SDK/platforms" -maxdepth 2 -type f -name android.jar | sort -V | tail -1)"
-          test -n "$D8"
           test -x "$D8"
           test -f "$ANDROID_JAR"
-          echo "D8=$D8"
-          echo "ANDROID_JAR=$ANDROID_JAR"
           rm -rf /tmp/gcb-d8
           mkdir -p /tmp/gcb-d8
           "$D8" --min-api 21 --lib "$ANDROID_JAR" --output /tmp/gcb-d8 \
-            buildbilling/build/externalComponents-classes/com.gatecraft.billing.jar
+            buildbilling/build/shaded/GateCraftBilling-shaded.jar
           test -f /tmp/gcb-d8/classes.dex
           rm -f buildbilling/build/externalComponents/com.gatecraft.billing/classes.jar
           (cd /tmp/gcb-d8 && zip -q "$GITHUB_WORKSPACE/buildbilling/build/externalComponents/com.gatecraft.billing/classes.jar" classes.dex)
-          unzip -t buildbilling/build/externalComponents/com.gatecraft.billing/classes.jar
           mkdir -p buildbilling/out
           rm -f buildbilling/out/com.gatecraft.billing.aix
           (cd buildbilling/build/externalComponents && zip -qr "$GITHUB_WORKSPACE/buildbilling/out/com.gatecraft.billing.aix" com.gatecraft.billing)
 
-      - name: Inspect AIX
+      - name: Inspect final AIX
         run: |
           set -eux
           test -f buildbilling/out/com.gatecraft.billing.aix
-          unzip -l buildbilling/out/com.gatecraft.billing.aix | sed -n '1,240p'
           unzip -t buildbilling/out/com.gatecraft.billing.aix
           unzip -p buildbilling/out/com.gatecraft.billing.aix com.gatecraft.billing/classes.jar > /tmp/classes.jar
           unzip -t /tmp/classes.jar
-          unzip -l /tmp/classes.jar
+          unzip -q -o /tmp/classes.jar -d /tmp/classesdex
+          strings /tmp/classesdex/classes.dex | grep '9.1.0'
+          strings /tmp/classesdex/classes.dex | grep 'GateCraftBilling'
+          strings /tmp/classesdex/classes.dex | grep 'ProxyBillingActivity'
+          echo 'Final AIX size:'
+          ls -lh buildbilling/out/com.gatecraft.billing.aix
+          echo 'Final component metadata:'
+          cat buildbilling/build/externalComponents/com.gatecraft.billing/component.json
+          echo 'Final component build info:'
+          cat buildbilling/build/externalComponents/com.gatecraft.billing/files/component_build_info.json
 
       - name: Upload GateCraftBilling AIX
         uses: actions/upload-artifact@v4
