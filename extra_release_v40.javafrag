@@ -29,6 +29,18 @@
       try {
         if (c instanceof com.google.appinventor.components.runtime.Clock) {
           gcSetProperty(c, "TimerEnabled", Boolean.FALSE);
+        } else if (c instanceof com.google.appinventor.components.runtime.Web) {
+          // Web keeps its current async request in the private lastTask FutureTask. There is no
+          // public App Inventor Cancel block, so cancel it only while the physical screen is closing.
+          try {
+            java.lang.reflect.Field f = com.google.appinventor.components.runtime.Web.class.getDeclaredField("lastTask");
+            f.setAccessible(true);
+            Object task = f.get(c);
+            if (task instanceof java.util.concurrent.Future) {
+              ((java.util.concurrent.Future<?>) task).cancel(true);
+            }
+            f.set(c, null);
+          } catch (Throwable ignoredWeb) { }
         } else if (c instanceof com.google.appinventor.components.runtime.ListView) {
           gcSetProperty(c, "Elements", YailList.makeEmptyList());
         } else if (c instanceof com.google.appinventor.components.runtime.Image) {
