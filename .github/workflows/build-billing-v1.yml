@@ -1,0 +1,137 @@
+name: Build GateCraftBilling v1
+
+on:
+  push:
+    branches: [ gatecraft-billing-v1 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant maven unzip
+
+      - name: Clone official MIT App Inventor extension template
+        run: |
+          git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildbilling
+          rm -rf buildbilling/src/*
+          mkdir -p buildbilling/src/com/gatecraft/billing
+          cp billing/GateCraftBilling.java buildbilling/src/com/gatecraft/billing/GateCraftBilling.java
+
+      - name: Resolve Play Billing 9.1.0 runtime dependencies
+        run: |
+          cat > /tmp/gcb-pom.xml <<'EOF'
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>com.gatecraft</groupId>
+            <artifactId>billing-resolver</artifactId>
+            <version>1.0</version>
+            <repositories>
+              <repository>
+                <id>google</id>
+                <url>https://maven.google.com</url>
+              </repository>
+              <repository>
+                <id>central</id>
+                <url>https://repo1.maven.org/maven2</url>
+              </repository>
+            </repositories>
+            <dependencies>
+              <dependency>
+                <groupId>com.android.billingclient</groupId>
+                <artifactId>billing</artifactId>
+                <version>9.1.0</version>
+                <type>aar</type>
+              </dependency>
+            </dependencies>
+          </project>
+          EOF
+          mkdir -p buildbilling/depsraw
+          mvn -q -f /tmp/gcb-pom.xml dependency:copy-dependencies \
+            -DincludeScope=runtime \
+            -DoutputDirectory="$GITHUB_WORKSPACE/buildbilling/depsraw"
+          echo "Resolved artifacts:"
+          find buildbilling/depsraw -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Convert AAR dependencies to extension JAR dependencies
+        run: |
+          set -euxo pipefail
+          rm -rf buildbilling/lib/deps/*
+          mkdir -p buildbilling/lib/deps /tmp/gcb-aar
+          for f in buildbilling/depsraw/*; do
+            base="$(basename "$f")"
+            case "$base" in
+              *.jar)
+                cp "$f" "buildbilling/lib/deps/$base"
+                ;;
+              *.aar)
+                name="${base%.aar}"
+                rm -rf "/tmp/gcb-aar/$name"
+                mkdir -p "/tmp/gcb-aar/$name"
+                unzip -q "$f" -d "/tmp/gcb-aar/$name"
+                if [ -f "/tmp/gcb-aar/$name/classes.jar" ]; then
+                  cp "/tmp/gcb-aar/$name/classes.jar" "buildbilling/lib/deps/$name.jar"
+                fi
+                if [ -d "/tmp/gcb-aar/$name/libs" ]; then
+                  for j in "/tmp/gcb-aar/$name"/libs/*.jar; do
+                    [ -e "$j" ] || continue
+                    cp "$j" "buildbilling/lib/deps/${name}-$(basename "$j")"
+                  done
+                fi
+                ;;
+            esac
+          done
+          echo "AIX dependency jars:"
+          ls -lh buildbilling/lib/deps
+
+      - name: Inject @UsesLibraries dependency list
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          depdir=Path('buildbilling/lib/deps')
+          libs=','.join(sorted(p.name for p in depdir.glob('*.jar')))
+          if not libs:
+              raise SystemExit('No dependency jars resolved')
+          p=Path('buildbilling/src/com/gatecraft/billing/GateCraftBilling.java')
+          s=p.read_text(encoding='utf-8')
+          if '__GCB_LIBS__' not in s:
+              raise SystemExit('Library placeholder missing')
+          p.write_text(s.replace('__GCB_LIBS__', libs), encoding='utf-8')
+          print('UsesLibraries:', libs)
+          PY
+
+      - name: Build AIX with MIT extension template
+        run: |
+          cd buildbilling
+          ant clean extensions
+
+      - name: Inspect AIX
+        run: |
+          set -eux
+          find buildbilling/out -maxdepth 2 -type f -print
+          unzip -l buildbilling/out/*.aix | sed -n '1,160p'
+          unzip -t buildbilling/out/*.aix
+
+      - name: Upload GateCraftBilling AIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftBilling-v1-aix
+          path: buildbilling/out/*.aix
+          if-no-files-found: error
