@@ -61,6 +61,10 @@ public final class GateCraftBilling extends AndroidNonvisibleComponent
   private final Set<String> ownedProducts = new HashSet<String>();
   private String lastError = "";
   private int lastResponseCode = BillingClient.BillingResponseCode.OK;
+  private int lastRawPurchaseCount = -1;
+  private int lastRawQueryResponseCode = BillingClient.BillingResponseCode.OK;
+  private String lastRawQueryMessage = "";
+  private String lastRawPurchases = "not queried";
 
   public GateCraftBilling(ComponentContainer container) {
     super(container.$form());
@@ -163,6 +167,26 @@ public final class GateCraftBilling extends AndroidNonvisibleComponent
   @SimpleFunction(description = "Returns the last Billing error/debug message seen by the extension.")
   public String LastError() {
     return lastError;
+  }
+
+  @SimpleFunction(description = "Returns the raw purchase count from the latest queryPurchasesAsync callback; -1 means the list was null or not queried yet.")
+  public int LastRawPurchaseCount() {
+    return lastRawPurchaseCount;
+  }
+
+  @SimpleFunction(description = "Returns the response code from the latest queryPurchasesAsync callback before entitlement filtering.")
+  public int LastRawQueryResponseCode() {
+    return lastRawQueryResponseCode;
+  }
+
+  @SimpleFunction(description = "Returns the debug message from the latest queryPurchasesAsync callback before entitlement filtering.")
+  public String LastRawQueryMessage() {
+    return lastRawQueryMessage;
+  }
+
+  @SimpleFunction(description = "Returns compact raw purchase records from the latest queryPurchasesAsync callback: products, state, acknowledged and a short token prefix.")
+  public String LastRawPurchases() {
+    return lastRawPurchases;
   }
 
   @SimpleEvent(description = "Billing connection completed successfully.")
@@ -389,6 +413,7 @@ public final class GateCraftBilling extends AndroidNonvisibleComponent
         .build();
     billingClient.queryPurchasesAsync(params, new PurchasesResponseListener() {
       @Override public void onQueryPurchasesResponse(BillingResult billingResult, List<Purchase> purchases) {
+        captureRawPurchases(billingResult, purchases);
         rememberResult(billingResult);
         if (billingResult == null || billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
           fail("RefreshEntitlements", billingResult == null ? BillingClient.BillingResponseCode.ERROR : billingResult.getResponseCode(), debugMessage(billingResult));
@@ -401,6 +426,43 @@ public final class GateCraftBilling extends AndroidNonvisibleComponent
         emitEntitlements();
       }
     });
+  }
+
+  private void captureRawPurchases(BillingResult billingResult, List<Purchase> purchases) {
+    lastRawQueryResponseCode = billingResult == null ? BillingClient.BillingResponseCode.ERROR : billingResult.getResponseCode();
+    lastRawQueryMessage = debugMessage(billingResult);
+    if (purchases == null) {
+      lastRawPurchaseCount = -1;
+      lastRawPurchases = "null";
+      return;
+    }
+    lastRawPurchaseCount = purchases.size();
+    if (purchases.size() == 0) {
+      lastRawPurchases = "[]";
+      return;
+    }
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < purchases.size(); i++) {
+      Purchase p = purchases.get(i);
+      if (i > 0) sb.append(" | ");
+      if (p == null) {
+        sb.append("#").append(i + 1).append("{null}");
+        continue;
+      }
+      int state = p.getPurchaseState();
+      String stateName = state == Purchase.PurchaseState.PURCHASED ? "PURCHASED" :
+          (state == Purchase.PurchaseState.PENDING ? "PENDING" : "OTHER(" + state + ")");
+      String token = safe(p.getPurchaseToken());
+      if (token.length() > 10) token = token.substring(0, 10) + "…";
+      List<String> products = p.getProducts();
+      sb.append("#").append(i + 1)
+          .append("{products=").append(products == null ? "null" : products.toString())
+          .append(",state=").append(stateName)
+          .append(",ack=").append(p.isAcknowledged())
+          .append(",token=").append(token)
+          .append("}");
+    }
+    lastRawPurchases = sb.toString();
   }
 
   private void processPurchase(final Purchase purchase, final boolean emitPurchaseEvent) {
