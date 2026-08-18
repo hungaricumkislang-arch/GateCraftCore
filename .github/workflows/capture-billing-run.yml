@@ -1,0 +1,51 @@
+name: Capture Billing Build Run
+
+on:
+  push:
+    branches: [ gatecraft-billing-v1 ]
+    paths-ignore:
+      - billing/LATEST_BILLING_RUN.txt
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for billing build and record run id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUN_ID=""
+          for i in $(seq 1 90); do
+            RUN_ID="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=30" --jq '.workflow_runs[] | select(.path==".github/workflows/build-billing-v1.yml") | .id' | head -1 || true)"
+            if [ -n "$RUN_ID" ]; then
+              STATUS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.status')"
+              CONCLUSION="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.conclusion // ""')"
+              echo "billing run=$RUN_ID status=$STATUS conclusion=$CONCLUSION"
+              if [ "$STATUS" = "completed" ]; then
+                if [ "$CONCLUSION" != "success" ]; then
+                  echo "Billing build failed: $CONCLUSION"
+                  exit 1
+                fi
+                printf '%s\n' "$RUN_ID" > billing/LATEST_BILLING_RUN.txt
+                break
+              fi
+            fi
+            sleep 10
+          done
+          test -s billing/LATEST_BILLING_RUN.txt
+
+      - name: Commit run id marker
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add billing/LATEST_BILLING_RUN.txt
+          git commit -m "Record billing build run [skip helper]" || exit 0
+          git push
