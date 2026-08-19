@@ -1,0 +1,149 @@
+name: Build GateCraftPDF AIX and Test AIA
+
+on:
+  push:
+    branches: [ gatecraft-fullfix-v41 ]
+    paths:
+      - 'pdf_extension/**'
+      - '.github/workflows/build-gatecraft-pdf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GateCraftCore
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant unzip zip
+
+      - name: Get official MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+
+      - name: Install GateCraftPDF source
+        run: |
+          rm -rf buildenv/src/*
+          cp -R pdf_extension/src/. buildenv/src/
+          find buildenv/src -type f -print
+
+      - name: Build GateCraftPDF AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+
+      - name: Collect and inspect AIX
+        run: |
+          set -euo pipefail
+          mkdir -p dist /tmp/gcpdf_aix
+          mapfile -t AIXS < <(find buildenv/out -maxdepth 2 -type f -name '*.aix' -print)
+          if [ "${#AIXS[@]}" -ne 1 ]; then
+            echo "Expected exactly one AIX, found ${#AIXS[@]}"
+            printf '%s\n' "${AIXS[@]}"
+            exit 1
+          fi
+          cp "${AIXS[0]}" dist/GateCraftPDF.aix
+          unzip -t dist/GateCraftPDF.aix
+          unzip -q dist/GateCraftPDF.aix -d /tmp/gcpdf_aix
+          find /tmp/gcpdf_aix -maxdepth 4 -type f -print
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('/tmp/gcpdf_aix')
+          comps=list(root.rglob('component.json'))+list(root.rglob('components.json'))
+          if not comps:
+              raise SystemExit('No component metadata found in AIX')
+          text='\n'.join(p.read_text(encoding='utf-8', errors='replace') for p in comps)
+          for required in ['GateCraftPDF','CreatePDF','CreateSampleOfferPDF','SaveToDownloads','OpenLastPDF','ShareLastPDF','LastError']:
+              if required not in text:
+                  raise SystemExit('Missing AIX API metadata: '+required)
+          print('AIX metadata API check PASS')
+          PY
+
+      - name: Build standalone GateCraftPDF test AIA
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gcpdf_test
+          mkdir -p /tmp/gcpdf_test
+          cp -R pdf_extension/test_project/. /tmp/gcpdf_test/
+          mkdir -p /tmp/gcpdf_test/assets/external_comps/com.gatecraft.pdf
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          src=Path('/tmp/gcpdf_aix')
+          entries=[p for p in src.iterdir() if p.name != '__MACOSX']
+          payload=src
+          if len(entries)==1 and entries[0].is_dir():
+              payload=entries[0]
+          dest=Path('/tmp/gcpdf_test/assets/external_comps/com.gatecraft.pdf')
+          for p in payload.iterdir():
+              d=dest/p.name
+              if p.is_dir(): shutil.copytree(str(p), str(d), dirs_exist_ok=True)
+              else: shutil.copy2(str(p), str(d))
+          print('Extension payload copied from',payload)
+          print('\n'.join(str(p.relative_to(dest)) for p in dest.rglob('*') if p.is_file()))
+          PY
+          (cd /tmp/gcpdf_test && zip -qr "$GITHUB_WORKSPACE/dist/GateCraftPDF_Test.aia" .)
+
+      - name: Static validation of test AIA
+        run: |
+          set -euo pipefail
+          unzip -t dist/GateCraftPDF_Test.aia
+          rm -rf /tmp/gcpdf_validate
+          mkdir -p /tmp/gcpdf_validate
+          unzip -q dist/GateCraftPDF_Test.aia -d /tmp/gcpdf_validate
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, re, xml.etree.ElementTree as ET, zipfile, hashlib
+          root=Path('/tmp/gcpdf_validate')
+          scm=next(root.rglob('Screen1.scm'))
+          bky=next(root.rglob('Screen1.bky'))
+          raw=scm.read_text(encoding='utf-8')
+          payload=raw.split('$JSON\n',1)[1].rsplit('\n|#',1)[0]
+          data=json.loads(payload)
+          comps=data['Properties']['$Components']
+          pdf=[c for c in comps if c.get('$Type')=='GateCraftPDF']
+          if len(pdf)!=1 or pdf[0].get('$Version')!='1':
+              raise SystemExit('GateCraftPDF component missing or wrong version in SCM')
+          tree=ET.parse(str(bky))
+          ids=[]
+          for e in tree.getroot().iter():
+              if 'id' in e.attrib: ids.append(e.attrib['id'])
+          if len(ids)!=len(set(ids)):
+              raise SystemExit('Duplicate Blockly IDs in test AIA')
+          txt=bky.read_text(encoding='utf-8')
+          for required in ['Initialize','CreateSampleOfferPDF','SaveToDownloads','OpenLastPDF','ShareLastPDF']:
+              if ('method_name="'+required+'"') not in txt:
+                  raise SystemExit('Missing test block method: '+required)
+          ext=root/'assets'/'external_comps'/'com.gatecraft.pdf'
+          if not (ext/'classes.jar').exists():
+              matches=list(ext.rglob('classes.jar'))
+              if not matches: raise SystemExit('classes.jar missing from test AIA extension payload')
+          print('SCM JSON PASS')
+          print('BKY XML PASS')
+          print('Duplicate block IDs: 0')
+          print('GateCraftPDF component/method refs PASS')
+          for f in [Path('dist/GateCraftPDF.aix'),Path('dist/GateCraftPDF_Test.aia')]:
+              h=hashlib.sha256(f.read_bytes()).hexdigest()
+              print(f.name, f.stat().st_size, h)
+          PY
+
+      - name: Upload GateCraftPDF artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftPDF-v1-runtime-test
+          path: |
+            dist/GateCraftPDF.aix
+            dist/GateCraftPDF_Test.aia
+          if-no-files-found: error
