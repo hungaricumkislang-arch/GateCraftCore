@@ -1,0 +1,39 @@
+name: Hash GateCraftPDF release transfer lines
+
+on:
+  push:
+    branches: [ gatecraft-fullfix-v41 ]
+    paths:
+      - '.github/workflows/hash-pdf-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  hash-lines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hash base64 transfer lines
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          base=Path('pdf_extension/release')
+          for name in ['GateCraftPDF.aix.b64','GateCraftPDF_Test.aia.b64']:
+              p=base/name
+              lines=p.read_text(encoding='ascii').splitlines()
+              out=[]
+              for i,line in enumerate(lines,1):
+                  out.append(f'{i:03d} {len(line):04d} {hashlib.sha256(line.encode("ascii")).hexdigest()}')
+              (base/(name+'.linesha')).write_text('\n'.join(out)+'\n',encoding='ascii')
+          PY
+          git config user.name "gatecraft-pdf-builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add pdf_extension/release/*.linesha
+          if ! git diff --cached --quiet; then
+            git commit -m "Add GateCraftPDF transfer line hashes [skip ci]"
+            git push origin HEAD:gatecraft-fullfix-v41
+          fi
