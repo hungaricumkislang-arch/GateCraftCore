@@ -4,12 +4,13 @@ on:
   push:
     branches: [ gatecraft-fullfix-v41 ]
     paths:
-      - 'pdf_extension/**'
+      - 'pdf_extension/src/**'
+      - 'pdf_extension/test_project/**'
       - '.github/workflows/build-gatecraft-pdf.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -59,7 +60,6 @@ jobs:
           find /tmp/gcpdf_aix -maxdepth 4 -type f -print
           python3 - <<'PY'
           from pathlib import Path
-          import json
           root=Path('/tmp/gcpdf_aix')
           comps=list(root.rglob('component.json'))+list(root.rglob('components.json'))
           if not comps:
@@ -105,7 +105,7 @@ jobs:
           unzip -q dist/GateCraftPDF_Test.aia -d /tmp/gcpdf_validate
           python3 - <<'PY'
           from pathlib import Path
-          import json, re, xml.etree.ElementTree as ET, zipfile, hashlib
+          import json, xml.etree.ElementTree as ET, hashlib
           root=Path('/tmp/gcpdf_validate')
           scm=next(root.rglob('Screen1.scm'))
           bky=next(root.rglob('Screen1.bky'))
@@ -139,7 +139,7 @@ jobs:
               print(f.name, f.stat().st_size, h)
           PY
 
-      - name: Upload GateCraftPDF artifacts
+      - name: Upload GateCraftPDF workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GateCraftPDF-v1-runtime-test
@@ -147,3 +147,19 @@ jobs:
             dist/GateCraftPDF.aix
             dist/GateCraftPDF_Test.aia
           if-no-files-found: error
+
+      - name: Publish validated binaries to isolated release folder
+        run: |
+          set -euo pipefail
+          rm -rf pdf_extension/release
+          mkdir -p pdf_extension/release
+          cp dist/GateCraftPDF.aix pdf_extension/release/GateCraftPDF.aix
+          cp dist/GateCraftPDF_Test.aia pdf_extension/release/GateCraftPDF_Test.aia
+          (cd pdf_extension/release && sha256sum GateCraftPDF.aix GateCraftPDF_Test.aia > SHA256SUMS.txt)
+          git config user.name "gatecraft-pdf-builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add pdf_extension/release
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish validated GateCraftPDF v1 artifacts [skip ci]"
+            git push origin HEAD:gatecraft-fullfix-v41
+          fi
