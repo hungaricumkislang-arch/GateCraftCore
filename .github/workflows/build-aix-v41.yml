@@ -89,9 +89,10 @@ jobs:
           mkdir -p build_artifacts
           cp buildenv/out/*.aix build_artifacts/GateCraftCore-lang12-pilot.aix
           base64 -w 76 build_artifacts/GateCraftCore-lang12-pilot.aix > build_artifacts/GateCraftCore-lang12-pilot.aix.b64
+          printf '%s\n' "$GITHUB_RUN_ID" > build_artifacts/RUN_ID.txt
           git config user.name gatecraft-lang-builder
           git config user.email actions@users.noreply.github.com
-          git add build_artifacts/GateCraftCore-lang12-pilot.aix build_artifacts/GateCraftCore-lang12-pilot.aix.b64
+          git add build_artifacts/GateCraftCore-lang12-pilot.aix build_artifacts/GateCraftCore-lang12-pilot.aix.b64 build_artifacts/RUN_ID.txt
           git commit -m "Publish language pilot AIX [skip ci]" || exit 0
           git push
       - name: Upload AIX artifact
