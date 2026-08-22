@@ -1,5 +1,7 @@
   private java.util.HashMap<String, String[]> gcLang6Cache = null;
   private String gcLang6LoadError = "";
+  private java.util.HashMap<String, String[]> gcLangX6Cache = null;
+  private String gcLangX6LoadError = "";
 
   private synchronized void gcEnsureLang6() {
     if (gcLang6Cache != null) return;
@@ -43,13 +45,79 @@
     gcLang6Cache = loaded;
   }
 
+  private synchronized void gcEnsureLangX6() {
+    if (gcLangX6Cache != null) return;
+    java.util.HashMap<String, String[]> loaded = new java.util.HashMap<String, String[]>();
+    java.io.InputStream raw = null;
+    java.util.zip.GZIPInputStream gzip = null;
+    try {
+      raw = com.google.appinventor.components.runtime.util.MediaUtil.openMedia(form, "gc_langx6.dat");
+      gzip = new java.util.zip.GZIPInputStream(raw);
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      byte[] buffer = new byte[8192];
+      int n;
+      while ((n = gzip.read(buffer)) >= 0) {
+        if (n > 0) out.write(buffer, 0, n);
+      }
+      String data = new String(out.toByteArray(), "UTF-8");
+      java.util.ArrayList<String> fields = new java.util.ArrayList<String>();
+      int start = 0;
+      for (int i = 0; i <= data.length(); i++) {
+        if (i == data.length() || data.charAt(i) == 0) {
+          fields.add(data.substring(start, i));
+          start = i + 1;
+        }
+      }
+      if (fields.size() % 7 != 0) {
+        throw new java.io.IOException("Invalid gc_langx6.dat field count: " + fields.size());
+      }
+      for (int i = 0; i < fields.size(); i += 7) {
+        String key = fields.get(i);
+        String[] texts = new String[6];
+        for (int lang = 0; lang < 6; lang++) texts[lang] = fields.get(i + 1 + lang);
+        loaded.put(key, texts);
+      }
+      gcLangX6LoadError = "";
+    } catch (Throwable ex) {
+      gcLangX6LoadError = ex.getClass().getSimpleName() + ": " + String.valueOf(ex.getMessage());
+      loaded.clear();
+    } finally {
+      try { if (gzip != null) gzip.close(); else if (raw != null) raw.close(); } catch (Throwable ignored) { }
+    }
+    gcLangX6Cache = loaded;
+  }
+
+  private int gcLang12Effective(double languageIndex) {
+    int requested = (int) Math.round(languageIndex);
+    if (requested >= 7 && requested <= 12) return requested;
+    if (requested == 2) {
+      try {
+        int actual = (int) Math.round(PlatformLanguagePreference());
+        if (actual >= 7 && actual <= 12) return actual;
+      } catch (Throwable ignored) { }
+    }
+    return requested;
+  }
+
   @SimpleFunction(description = "Returns one exact GateCraft six-language text stored in the bundled compressed gc_lang6.dat asset. Language index is 1..6; invalid index falls back to Hungarian.")
   public String Lang6(String key, double languageIndex) {
     gcEnsureLang6();
     if (gcLang6Cache == null || key == null) return "";
+    int effective = gcLang12Effective(languageIndex);
+    if (effective >= 7 && effective <= 12) {
+      gcEnsureLangX6();
+      if (gcLangX6Cache != null) {
+        String[] extra = gcLangX6Cache.get(key);
+        if (extra != null && extra.length == 6) {
+          String value = extra[effective - 7];
+          if (value != null && value.length() > 0) return value;
+        }
+      }
+      effective = 2;
+    }
     String[] texts = gcLang6Cache.get(key);
     if (texts == null || texts.length != 6) return "";
-    int lang = (int) Math.round(languageIndex);
+    int lang = effective;
     if (lang < 1 || lang > 6) lang = 1;
     String value = texts[lang - 1];
     return value == null ? "" : value;
