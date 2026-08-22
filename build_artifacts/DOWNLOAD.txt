@@ -1,0 +1,1 @@
+https://raw.githubusercontent.com/hungaricumkislang-arch/GateCraftCore/gatecraft-lang12-pilot/build_artifacts/GateCraftCore-lang12-pilot.aix
