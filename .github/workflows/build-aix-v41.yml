@@ -3,7 +3,7 @@ name: Build GateCraftCore v4.1 AIX
 
 on:
   push:
-    branches: [ gatecraft-fullfix-v41 ]
+    branches: [ gatecraft-lang12-pilot ]
   workflow_dispatch:
 
 permissions:
