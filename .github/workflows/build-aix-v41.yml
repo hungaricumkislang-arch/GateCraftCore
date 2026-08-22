@@ -1,13 +1,16 @@
-# GateCraftCore AIX build workflow v41 - audit fixes excluding Screen3/CUT
+# GateCraftCore AIX build workflow v41 - language pilot
 name: Build GateCraftCore v4.1 AIX
 
 on:
   push:
     branches: [ gatecraft-lang12-pilot ]
+    paths:
+      - 'extra_lang_asset.javafrag'
+      - '.github/workflows/build-aix-v41.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -81,6 +84,15 @@ jobs:
         run: |
           cd buildenv
           ant clean extensions
+      - name: Publish pilot AIX to branch
+        run: |
+          mkdir -p build_artifacts
+          cp buildenv/out/*.aix build_artifacts/GateCraftCore-lang12-pilot.aix
+          git config user.name gatecraft-lang-builder
+          git config user.email actions@users.noreply.github.com
+          git add build_artifacts/GateCraftCore-lang12-pilot.aix
+          git commit -m "Publish language pilot AIX [skip ci]" || exit 0
+          git push
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
