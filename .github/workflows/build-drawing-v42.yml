@@ -1,0 +1,57 @@
+name: Build GateCraftDrawing v1 AIX
+
+on:
+  push:
+    branches: [ gatecraft-drawing-v42 ]
+    paths:
+      - 'drawing_extension/src/**'
+      - '.github/workflows/build-drawing-v42.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GateCraftCore
+        uses: actions/checkout@v4
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant unzip
+      - name: Get official MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+      - name: Install GateCraftDrawing source
+        run: |
+          rm -rf buildenv/src/*
+          cp -R drawing_extension/src/. buildenv/src/
+          find buildenv/src -type f -print
+      - name: Build AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+      - name: Validate AIX metadata
+        run: |
+          set -euo pipefail
+          mkdir -p dist /tmp/gcdraw
+          mapfile -t AIXS < <(find buildenv/out -maxdepth 2 -type f -name '*.aix' -print)
+          if [ "${#AIXS[@]}" -ne 1 ]; then echo "Expected 1 AIX, got ${#AIXS[@]}"; exit 1; fi
+          cp "${AIXS[0]}" dist/GateCraftDrawing.aix
+          unzip -t dist/GateCraftDrawing.aix
+          unzip -q dist/GateCraftDrawing.aix -d /tmp/gcdraw
+          grep -R -q 'CreateAndShareDrawingPDF' /tmp/gcdraw
+          grep -R -q 'GateCraftDrawing' /tmp/gcdraw
+          echo 'GateCraftDrawing AIX metadata PASS'
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftDrawing-v1-aix
+          path: dist/GateCraftDrawing.aix
+          if-no-files-found: error
