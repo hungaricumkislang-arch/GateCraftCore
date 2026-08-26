@@ -115,7 +115,7 @@ jobs:
           # build284: delayed Project Center opening must finish with V2 refresh after
           # the generic Center theme, otherwise static Hungarian text/theme can win.
           old9 = 'gcCApplyTexts(m);gcCApplyTheme(m);gcCTextSet(m,"LBL_GC_PageTitle",gcCPageTitle(gcCenterPage));'
-          new9 = 'gcCApplyTexts(m);gcCApplyTheme(m);if("PROJECT".equals(gcCenterPage))ProjectV2RefreshUi();gcCTextSet(m,"LBL_GC_PageTitle",gcCPageTitle(gcCenterPage));'
+          new9 = 'gcCApplyTexts(m);gcCApplyTheme(m);if("PROJECT".equals(gcCenterPage)){ProjectV2RefreshUi();gc284ApplyProjectFieldTexts(m,gcCLang());}gcCTextSet(m,"LBL_GC_PageTitle",gcCPageTitle(gcCenterPage));'
           if old9 not in s:
               raise SystemExit('GateCraft Center final refresh source pattern not found')
           s = s.replace(old9, new9, 1)
