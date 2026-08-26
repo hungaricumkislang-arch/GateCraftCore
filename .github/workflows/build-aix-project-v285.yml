@@ -1,0 +1,15 @@
+name: GateCraft build285 workflow registration
+
+on:
+  push:
+    branches: [ gatecraft-project-v42-compat41-hotfix284, gatecraft-project-v42-compat41-phase2-285 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "GateCraft build285 workflow registered"
