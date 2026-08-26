@@ -1,8 +1,8 @@
-name: Build GateCraftCore Project v4.2 compat41 AIX
+name: Build GateCraftCore Project v4.2 compat41 build285
 
 on:
   push:
-    branches: [ gatecraft-project-v42-compat41, gatecraft-project-v42-compat41-hotfix284 ]
+    branches: [ gatecraft-project-v42-compat41-phase2-285 ]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
           rm -rf buildenv/src/*
           cat source_bundle/part*.txt | base64 --decode > /tmp/gatecraftcore-src.tar.gz
           tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
-      - name: Inject Project 2.0 runtime with v41 editor compatibility
+      - name: Inject build285 runtime with v41 editor compatibility
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -39,7 +39,6 @@ jobs:
               raise SystemExit('Expected exactly one GateCraftCore.java, found %d' % len(matches))
           p = matches[0]
           s = p.read_text(encoding='utf-8')
-          # CRITICAL: keep the component annotation at the proven editor version 41.
           s = s.replace('version = 10', 'version = 41', 1)
           s = s.replace('return "1.0.0";', 'return "4.1.0";', 1)
           fragments = []
@@ -60,64 +59,67 @@ jobs:
               'extra_center_native_v38_05.javafrag', 'extra_ui_v38.javafrag',
               'extra_release_v40.javafrag', 'extra_fullfix_v41.javafrag',
               'extra_projecthub_v42.javafrag', 'extra_projecthub_v42_ui.javafrag',
-              'extra_hotfix284.javafrag']:
+              'extra_hotfix284.javafrag', 'extra_phase2_285.javafrag']:
               fragments.append(Path(fp).read_text(encoding='utf-8'))
           pos = s.rfind('}')
           if pos < 0:
               raise SystemExit('Could not locate class closing brace')
           s = s[:pos] + '\n' + '\n'.join(fragments) + '\n' + s[pos:]
+
           old = '''  public void PlatformApplyCurrentUi() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyModernFourTheme();\n  }'''
           new = '''  public void PlatformApplyCurrentUi() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyModernFourTheme();\n    gcV38ApplyModernExtras();\n    ProjectV2ApplyCurrentScreenUi();\n    gc284KeepProjectBarsWhite();\n  }'''
-          if old not in s:
-              raise SystemExit('PlatformApplyCurrentUi source pattern not found exactly')
+          if old not in s: raise SystemExit('PlatformApplyCurrentUi pattern missing')
           s = s.replace(old, new, 1)
+
           old2 = '''  public void PlatformPrepareScreen1Ui() {\n    String code = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    int index = gcPlatformThemeIndex(code);\n    if (index < 1 || index > 4) {\n      gcPlatformTinyPut("kozos_tema", "default");\n    }\n    PlatformConfigureFourThemeSelectors();\n  }'''
           new2 = '''  public void PlatformPrepareScreen1Ui() {\n    String code = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    int index = gcPlatformThemeIndex(code);\n    if (index < 1 || index > 4) {\n      gcPlatformTinyPut("kozos_tema", "default");\n    }\n    PlatformConfigureFourThemeSelectors();\n    gcV38PrepareScreen1Extras();\n  }'''
-          if old2 not in s:
-              raise SystemExit('PlatformPrepareScreen1Ui source pattern not found exactly')
+          if old2 not in s: raise SystemExit('PlatformPrepareScreen1Ui pattern missing')
           s = s.replace(old2, new2, 1)
+
           old3 = '''  public void PlatformApplySavedThemeLayout() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    String layout = gcPlatformString(gcPlatformTinyGet("kozos_layout", "CLASSIC"), "CLASSIC");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyLayoutCode(layout);\n  }'''
           new3 = '''  public void PlatformApplySavedThemeLayout() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    String layout = gcPlatformString(gcPlatformTinyGet("kozos_layout", "CLASSIC"), "CLASSIC");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyLayoutCode(layout);\n    ProjectV2ApplyCurrentScreenUi();\n    gc284KeepProjectBarsWhite();\n  }'''
-          if old3 not in s:
-              raise SystemExit('PlatformApplySavedThemeLayout source pattern not found exactly')
+          if old3 not in s: raise SystemExit('PlatformApplySavedThemeLayout pattern missing')
           s = s.replace(old3, new3, 1)
-          old4 = 'gcPlatformGetProperty(c, "Checked", Boolean.FALSE)'
-          new4 = 'gcPlatformGetProperty(c, c instanceof com.google.appinventor.components.runtime.Switch ? "On" : "Checked", Boolean.FALSE)'
-          if old4 not in s:
-              raise SystemExit('Project V2 CheckBox/Switch capture source pattern not found')
-          s = s.replace(old4, new4, 1)
-          old5 = 'if (inputs.length() > 18000 || results.length() > 18000) break;'
-          new5 = 'if (inputs.length() > 8000 || results.length() > 8000) break;'
-          if old5 not in s:
-              raise SystemExit('Project V2 capture size source pattern not found')
-          s = s.replace(old5, new5, 1)
-          old6 = 'while (rows.size() > 3000) rows.remove(rows.size() - 1);'
-          new6 = 'while (rows.size() > 600) rows.remove(rows.size() - 1);'
-          if old6 not in s:
-              raise SystemExit('Project V2 snapshot cap source pattern not found')
-          s = s.replace(old6, new6, 1)
 
-          # build284: project bar label remains light in every theme; save button follows theme.
+          s = s.replace('gcPlatformGetProperty(c, "Checked", Boolean.FALSE)',
+                        'gcPlatformGetProperty(c, c instanceof com.google.appinventor.components.runtime.Switch ? "On" : "Checked", Boolean.FALSE)', 1)
+          s = s.replace('if (inputs.length() > 18000 || results.length() > 18000) break;',
+                        'if (inputs.length() > 8000 || results.length() > 8000) break;', 1)
+          s = s.replace('while (rows.size() > 3000) rows.remove(rows.size() - 1);',
+                        'while (rows.size() > 600) rows.remove(rows.size() - 1);', 1)
+          s = s.replace('while (rows.size() > 1500) rows.remove(rows.size() - 1);',
+                        'while (rows.size() > 600) rows.remove(rows.size() - 1);', 1)
+
           old7 = '''      gcSetProperty(label, "BackgroundColor", Integer.valueOf(p[1]));\n      gcSetProperty(label, "TextColor", Integer.valueOf("marka2".equals(gcPlatformString(gcPlatformTinyGet("kozos_tema","default"),"default")) ? 0xFF111111 : (p[1] == 0xFFF2F4F5 ? 0xFF111111 : 0xFFFFFFFF)));'''
           new7 = '''      gcSetProperty(label, "BackgroundColor", Integer.valueOf(0x00FFFFFF));\n      gcSetProperty(label, "TextColor", Integer.valueOf(0xFF111111));'''
-          if old7 not in s:
-              raise SystemExit('Project V2 label style source pattern not found')
+          if old7 not in s: raise SystemExit('Project label style pattern missing')
           s = s.replace(old7, new7, 1)
 
-          # build284: all Screen1 clear-module buttons get real 12-language captions.
           old8 = '    gcV38Set(m,"BTN_MODULE_CLEAR_BACK","Text",gcV38L("BACK",l));'
-          new8 = old8 + '\n    gc284ApplyModuleClearTexts(m,l);'
-          if old8 not in s:
-              raise SystemExit('Screen1 clear-language source pattern not found')
-          s = s.replace(old8, new8, 1)
+          if old8 not in s: raise SystemExit('Screen1 clear-language pattern missing')
+          s = s.replace(old8, old8 + '\n    gc284ApplyModuleClearTexts(m,l);', 1)
 
-          # build284: delayed Project Center opening must finish with V2 refresh after
-          # the generic Center theme, otherwise static Hungarian text/theme can win.
           old9 = 'gcCApplyTexts(m);gcCApplyTheme(m);gcCTextSet(m,"LBL_GC_PageTitle",gcCPageTitle(gcCenterPage));'
           new9 = 'gcCApplyTexts(m);gcCApplyTheme(m);if("PROJECT".equals(gcCenterPage)){ProjectV2RefreshUi();gc284ApplyProjectFieldTexts(m,gcCLang());}gcCTextSet(m,"LBL_GC_PageTitle",gcCPageTitle(gcCenterPage));'
-          if old9 not in s:
-              raise SystemExit('GateCraft Center final refresh source pattern not found')
+          if old9 not in s: raise SystemExit('Center project final refresh pattern missing')
           s = s.replace(old9, new9, 1)
+
+          marker = '  @SimpleFunction(description="Returns localized Project Center 2.0 dashboard text for DATA/CALCS/MATERIALS/DRAWINGS/QUOTE/COSTS/WORK/LOG.")'
+          start = s.find(marker)
+          end = s.find('  private int[] gcPv2Palette()', start)
+          if start < 0 or end < 0: raise SystemExit('ProjectV2DashboardText region missing')
+          replacement = marker + '\n  public String ProjectV2DashboardText(String section) {\n    return gc285DashboardText(section);\n  }\n\n'
+          s = s[:start] + replacement + s[end:]
+
+          old_refresh = 'if (body != null) gcSetProperty(body,"Text", ProjectV2DashboardText("DATA"));'
+          new_refresh = 'if (body != null) gcSetProperty(body,"Text", ProjectV2DashboardText(gc285SavedSection()));'
+          if old_refresh not in s: raise SystemExit('ProjectV2RefreshUi body pattern missing')
+          s = s.replace(old_refresh, new_refresh, 1)
+
+          old_apply = 'public void ProjectV2ApplyDashboardSection(String section) {\n    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap(); Object body=map.get("LBL_PROJECT_V2_BODY");\n    if(body!=null)gcSetProperty(body,"Text",ProjectV2DashboardText(section));\n  }'
+          new_apply = 'public void ProjectV2ApplyDashboardSection(String section) {\n    gc285RememberSection(section);\n    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap(); Object body=map.get("LBL_PROJECT_V2_BODY");\n    if(body!=null)gcSetProperty(body,"Text",ProjectV2DashboardText(section));\n  }'
+          if old_apply not in s: raise SystemExit('ProjectV2ApplyDashboardSection pattern missing')
+          s = s.replace(old_apply, new_apply, 1)
 
           p.write_text(s, encoding='utf-8')
           print('patched', p)
@@ -129,6 +131,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-v42-runtime-v41-editor-compat-aix-hotfix284
+          name: GateCraftCore-build285-runtime-v41-editor-compat
           path: buildenv/out/*.aix
           if-no-files-found: error
