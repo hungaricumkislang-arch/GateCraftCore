@@ -1,0 +1,25 @@
+  // ------------------------------------------------------------------
+  // GateCraft build287 Project Center phase 3 compatibility helper.
+  // Private runtime helper only: no new editor-visible API.
+  // Quote value comes from the already-calculated/saved Ajanlat total.
+  // ------------------------------------------------------------------
+  private String gc287CaptureQuote(String rawValue) {
+    String pid = gcPv2ActiveId();
+    if (pid == null || pid.length() == 0) return "";
+    double quote = SafeNumber(rawValue, 0);
+    if (quote <= 0) return "";
+
+    // Re-saving the same latest quote must not create duplicate project rows.
+    for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() < 13) continue;
+      if (!pid.equals(mdString(r.get(1)))) continue;
+      if (!"QUOTE".equalsIgnoreCase(mdString(r.get(12)))) continue;
+      if (Math.abs(SafeNumber(r.get(9), 0) - quote) < 0.000001d) return mdString(r.get(0));
+      break;
+    }
+
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    String title = gcPv2Text("QUOTE", lang);
+    return ProjectV2AddSnapshot("QUOTE", title, "", "", "", 0.0d, quote, 0.0d, "", "QUOTE");
+  }
