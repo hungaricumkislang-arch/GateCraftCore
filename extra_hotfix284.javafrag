@@ -1,0 +1,35 @@
+  // ------------------------------------------------------------------
+  // GateCraft build284 targeted compatibility-safe UI helpers.
+  // Private helpers only: no editor-visible component API changes.
+  // ------------------------------------------------------------------
+  private String gc284ClearText(String code, int lang) {
+    int l = lang < 1 || lang > 12 ? 2 : lang;
+    String c = code == null ? "" : code.trim().toUpperCase(java.util.Locale.ROOT);
+    if ("KERITES".equals(c) || "ZSALU".equals(c) || "TERKO".equals(c) || "TRAPEZ".equals(c)
+        || "KISKAPU".equals(c) || "SZARNYAS".equals(c) || "TOLO".equals(c) || "USZO".equals(c)
+        || "BETON".equals(c) || "PANEL3D".equals(c) || "ELECTRO".equals(c)) {
+      return gcPv2ModuleTitle(c, l);
+    }
+    String[][] rows = new String[][]{
+      {"GARAZS","Garázskapu","Garage door","Garagentor","Puerta de garaje","Porte de garage","车库门","Porta da garage","Porta de garagem","Brama garażowa","Garagedeur","Ușă de garaj","Гаражные ворота"},
+      {"KORLAT","Korlát","Railing","Geländer","Barandilla","Garde-corps","栏杆","Ringhiera","Guarda-corpo","Balustrada","Leuning","Balustradă","Перила"},
+      {"MOTOR","Motorhatározó","Motor selector","Motor-Auswahl","Selector de motor","Sélecteur de moteur","电机选择器","Selettore motore","Seletor de motor","Dobór napędu","Motorselectie","Selector motor","Подбор привода"},
+      {"PROFIT","Profit kalkulátor","Profit calculator","Gewinnrechner","Calculadora de beneficio","Calculateur de profit","利润计算器","Calcolatore profitto","Calculadora de lucro","Kalkulator zysku","Winstcalculator","Calculator profit","Калькулятор прибыли"}
+    };
+    for (String[] r : rows) if (r[0].equals(c)) return r[l];
+    return c;
+  }
+
+  private void gc284ApplyModuleClearTexts(java.util.HashMap<String,Object> m, int lang) {
+    String[][] map = new String[][]{
+      {"BTN_CLEAR_KERITESLEC","KERITES"}, {"BTN_CLEAR_ZSALUKO","ZSALU"},
+      {"BTN_CLEAR_TERKO","TERKO"}, {"BTN_CLEAR_TRAPEZ","TRAPEZ"},
+      {"BTN_CLEAR_KISKAPU","KISKAPU"}, {"BTN_CLEAR_SZARNYAS","SZARNYAS"},
+      {"BTN_CLEAR_TOLO","TOLO"}, {"BTN_CLEAR_USZO","USZO"},
+      {"BTN_CLEAR_GARAZS","GARAZS"}, {"BTN_CLEAR_KORLAT","KORLAT"},
+      {"BTN_CLEAR_BETON","BETON"}, {"BTN_CLEAR_PANEL3D","PANEL3D"},
+      {"BTN_CLEAR_MOTOR","MOTOR"}, {"BTN_CLEAR_PROFIT","PROFIT"},
+      {"BTN_CLEAR_ELECTRO","ELECTRO"}
+    };
+    for (String[] x : map) gcV38Set(m, x[0], "Text", gc284ClearText(x[1], lang));
+  }
