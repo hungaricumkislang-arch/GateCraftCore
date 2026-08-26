@@ -1,5 +1,28 @@
   // Project Center 2.0 lightweight Blockly wrapper.
+  private String gcPv2ModuleTitle(String moduleCode, int lang) {
+    String c = moduleCode == null ? "" : moduleCode.trim().toUpperCase(java.util.Locale.ROOT);
+    String[][] rows = new String[][]{
+      {"KISKAPU","Kiskapu","Pedestrian gate","Gartentor","Puerta peatonal","Portillon","小门","Cancelletto","Portão pedonal","Furtka","Looppoort","Poartă pietonală","Калитка"},
+      {"SZARNYAS","Szárnyaskapu","Swing gate","Drehtor","Puerta batiente","Portail battant","平开门","Cancello a battente","Portão de batente","Brama skrzydłowa","Draaipoort","Poartă batantă","Распашные ворота"},
+      {"TOLO","Tolókapu","Sliding gate","Schiebetor","Puerta corredera","Portail coulissant","推拉门","Cancello scorrevole","Portão de correr","Brama przesuwna","Schuifpoort","Poartă culisantă","Откатные ворота"},
+      {"USZO","Úszókapu","Cantilever gate","Freitragendes Tor","Puerta autoportante","Portail autoportant","悬臂门","Cancello autoportante","Portão autoportante","Brama samonośna","Vrijdragende poort","Poartă autoportantă","Консольные ворота"},
+      {"KERITES","Kerítésléc","Fence slats","Zaunlatten","Lamas de valla","Lames de clôture","围栏板条","Doghe recinzione","Réguas de vedação","Sztachety","Schuttinglatten","Șipci gard","Ламели забора"},
+      {"ZSALU","Zsalukő","Formwork blocks","Schalsteine","Bloques de encofrado","Blocs à bancher","模板砌块","Blocchi cassero","Blocos de cofragem","Pustaki szalunkowe","Bekistingsblokken","Blocuri cofraj","Опалубочные блоки"},
+      {"TERKO","Térkő","Paving","Pflaster","Pavimento","Pavage","铺路石","Pavimentazione","Pavimento","Kostka brukowa","Bestrating","Pavaj","Брусчатка"},
+      {"TRAPEZ","Trapézlemez","Trapezoidal sheet","Trapezblech","Chapa trapezoidal","Tôle trapézoïdale","梯形板","Lamiera grecata","Chapa trapezoidal","Blacha trapezowa","Trapeziumplaat","Tablă trapezoidală","Профнастил"},
+      {"PANEL3D","3D panel","3D fence panel","3D-Zaunpanel","Panel 3D","Panneau 3D","3D围栏板","Pannello 3D","Painel 3D","Panel 3D","3D-paneel","Panou 3D","3D панель"},
+      {"BETON","Beton","Concrete","Beton","Hormigón","Béton","混凝土","Calcestruzzo","Betão","Beton","Beton","Beton","Бетон"},
+      {"LEPCSO","Lépcső","Stairs","Treppe","Escalera","Escalier","楼梯","Scala","Escada","Schody","Trap","Scară","Лестница"},
+      {"ELECTRO","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro","ElectroPro"}
+    };
+    int l = lang < 1 || lang > 12 ? 2 : lang;
+    for (String[] r : rows) if (r[0].equals(c)) return r[l];
+    return c.length() == 0 ? "Module" : c;
+  }
+
   @SimpleFunction(description="Saves the current calculator screen to the active Project Center 2.0 project and refreshes the module project bar.")
   public void ProjectV2SaveCurrentScreen(String moduleCode, String title) {
-    ProjectV2CaptureAndApply(moduleCode, title);
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    String localized = gcPv2ModuleTitle(moduleCode, lang);
+    ProjectV2CaptureAndApply(moduleCode, localized.length() > 0 ? localized : title);
   }
