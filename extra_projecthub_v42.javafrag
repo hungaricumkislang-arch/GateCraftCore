@@ -1,0 +1,366 @@
+  // ------------------------------------------------------------------
+  // GateCraft Project Center 2.0 - lightweight active-project + snapshot core
+  // Storage remains in the existing TinyDB "App" namespace.
+  // ------------------------------------------------------------------
+  private static final String GC_PV2_ACTIVE_ID = "GC_ACTIVE_PROJECT_ID";
+  private static final String GC_PV2_ACTIVE_NAME = "GC_ACTIVE_PROJECT_NAME";
+  private static final String GC_PV2_SNAPSHOTS = "GC_PROJECT_SNAPSHOTS_V2";
+  private static final String GC_PV2_LOG = "GC_PROJECT_LOG_V2";
+
+  private java.util.ArrayList<Object> gcPv2Rows(String key) {
+    return mdList(gcPlatformTinyGet(key, YailList.makeEmptyList()));
+  }
+
+  private void gcPv2Store(String key, java.util.ArrayList<Object> rows) {
+    gcPlatformTinyPut(key, YailList.makeList(rows));
+  }
+
+  private String gcPv2Id(String prefix) {
+    long now = System.currentTimeMillis();
+    return prefix + "-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(new java.util.Date(now))
+        + "-" + Integer.toHexString((int) (System.nanoTime() & 0xffff)).toUpperCase(java.util.Locale.ROOT);
+  }
+
+  private String gcPv2ActiveId() {
+    return gcPlatformString(gcPlatformTinyGet(GC_PV2_ACTIVE_ID, ""), "").trim();
+  }
+
+  private String gcPv2ActiveName() {
+    return gcPlatformString(gcPlatformTinyGet(GC_PV2_ACTIVE_NAME, ""), "").trim();
+  }
+
+  private String gcPv2ProjectNameById(String id) {
+    if (id == null || id.length() == 0) return "";
+    for (Object x : gcProjectRows()) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() >= 2 && id.equals(mdString(r.get(0)))) return mdString(r.get(1));
+    }
+    return "";
+  }
+
+  @SimpleFunction(description="Sets the active GateCraft project used by Project Center 2.0 and all module snapshots.")
+  public boolean ProjectV2SetActive(String projectId) {
+    String id = projectId == null ? "" : projectId.trim();
+    if (id.length() == 0) {
+      gcPlatformTinyPut(GC_PV2_ACTIVE_ID, "");
+      gcPlatformTinyPut(GC_PV2_ACTIVE_NAME, "");
+      return true;
+    }
+    String name = gcPv2ProjectNameById(id);
+    if (name.length() == 0) return false;
+    gcPlatformTinyPut(GC_PV2_ACTIVE_ID, id);
+    gcPlatformTinyPut(GC_PV2_ACTIVE_NAME, name);
+    gcPv2AppendLog(id, "ACTIVE", name);
+    return true;
+  }
+
+  @SimpleFunction(description="Returns the active GateCraft Project Center 2.0 project id.")
+  public String ProjectV2ActiveId() { return gcPv2ActiveId(); }
+
+  @SimpleFunction(description="Returns the active GateCraft Project Center 2.0 project name.")
+  public String ProjectV2ActiveName() {
+    String id = gcPv2ActiveId();
+    String name = gcPv2ProjectNameById(id);
+    if (name.length() > 0 && !name.equals(gcPv2ActiveName())) gcPlatformTinyPut(GC_PV2_ACTIVE_NAME, name);
+    return name.length() > 0 ? name : gcPv2ActiveName();
+  }
+
+  private YailList gcPv2SnapshotRow(String id, String projectId, String moduleCode, long created,
+      String title, String inputs, String results, String materials, double internalCost,
+      double quoteValue, double workHours, String drawPayload, String note) {
+    return list(id, projectId, moduleCode, (double) created, title, inputs, results, materials,
+        internalCost, quoteValue, workHours, drawPayload, note);
+  }
+
+  private String gcPv2Clean(Object value) {
+    String s = value == null ? "" : String.valueOf(value);
+    s = s.replace('\r', ' ').replace('\n', ' ').trim();
+    if (s.length() > 500) s = s.substring(0, 500);
+    return s;
+  }
+
+  private void gcPv2AppendPair(StringBuilder sb, String name, Object value) {
+    String v = gcPv2Clean(value);
+    if (v.length() == 0) return;
+    if (sb.length() > 0) sb.append('\n');
+    sb.append(name).append('=').append(v);
+  }
+
+  private boolean gcPv2ResultLabelName(String name) {
+    String n = name == null ? "" : name.toUpperCase(java.util.Locale.ROOT);
+    return n.contains("ERED") || n.contains("RESULT") || n.contains("OSSZ") || n.contains("TOTAL")
+        || n.contains("DARAB") || n.contains("_DB") || n.contains("HOSSZ") || n.contains("MERET")
+        || n.contains("MÉRET") || n.contains("SULY") || n.contains("SÚLY") || n.contains("KOLTSEG")
+        || n.contains("KÖLTSÉG") || n.contains("PRICE") || n.contains("AR_") || n.contains("_AR")
+        || n.contains("ÁR") || n.contains("M2") || n.contains("M3") || n.contains("KG")
+        || n.contains("OUTPUT") || n.contains("KIMENET") || n.contains("VEGERED") || n.contains("VÉGERED");
+  }
+
+  private String[] gcPv2CaptureScreenValues() {
+    java.util.HashMap<String, Object> map = gcBuildNamedComponentMap();
+    java.util.ArrayList<String> names = new java.util.ArrayList<String>(map.keySet());
+    java.util.Collections.sort(names);
+    StringBuilder inputs = new StringBuilder();
+    StringBuilder results = new StringBuilder();
+    for (String name : names) {
+      if (name == null) continue;
+      String up = name.toUpperCase(java.util.Locale.ROOT);
+      if (up.startsWith("BTN_PV2_") || up.startsWith("LBL_PV2_") || up.startsWith("VA_PV2_")) continue;
+      Object c = map.get(name);
+      if (c == null) continue;
+      try {
+        if (c instanceof com.google.appinventor.components.runtime.TextBox) {
+          gcPv2AppendPair(inputs, name, gcPlatformGetProperty(c, "Text", ""));
+        } else if (c instanceof com.google.appinventor.components.runtime.Spinner
+            || c instanceof com.google.appinventor.components.runtime.ListPicker) {
+          gcPv2AppendPair(inputs, name, gcPlatformGetProperty(c, "Selection", ""));
+        } else if (c instanceof com.google.appinventor.components.runtime.CheckBox
+            || c instanceof com.google.appinventor.components.runtime.Switch) {
+          gcPv2AppendPair(inputs, name, gcPlatformGetProperty(c, "Checked", Boolean.FALSE));
+        } else if (c instanceof com.google.appinventor.components.runtime.Label && gcPv2ResultLabelName(name)) {
+          gcPv2AppendPair(results, name, gcPlatformGetProperty(c, "Text", ""));
+        }
+      } catch (Throwable ignored) { }
+      if (inputs.length() > 18000 || results.length() > 18000) break;
+    }
+    return new String[]{inputs.toString(), results.toString()};
+  }
+
+  private void gcPv2AppendLog(String projectId, String action, String detail) {
+    if (projectId == null || projectId.length() == 0) return;
+    java.util.ArrayList<Object> rows = gcPv2Rows(GC_PV2_LOG);
+    rows.add(0, list(gcPv2Id("LOG"), projectId, (double) System.currentTimeMillis(),
+        action == null ? "" : action, detail == null ? "" : detail));
+    while (rows.size() > 1500) rows.remove(rows.size() - 1);
+    gcPv2Store(GC_PV2_LOG, rows);
+  }
+
+  @SimpleFunction(description="Adds one fixed Project Center 2.0 snapshot to the active project. Record=[snapshotId,projectId,moduleCode,createdMs,title,inputs,results,materials,internalCost,quoteValue,workHours,drawPayload,note]. Returns snapshot id or an ERR code.")
+  public String ProjectV2AddSnapshot(String moduleCode, String title, String inputs, String results,
+      String materials, double internalCost, double quoteValue, double workHours,
+      String drawPayload, String note) {
+    String pid = gcPv2ActiveId();
+    if (pid.length() == 0 || gcPv2ProjectNameById(pid).length() == 0) return "ERR:NO_ACTIVE_PROJECT";
+    long now = System.currentTimeMillis();
+    String id = gcPv2Id("SNAP");
+    String code = moduleCode == null ? "MODULE" : moduleCode.trim().toUpperCase(java.util.Locale.ROOT);
+    String ttl = title == null || title.trim().length() == 0 ? code : title.trim();
+    java.util.ArrayList<Object> rows = gcPv2Rows(GC_PV2_SNAPSHOTS);
+    rows.add(0, gcPv2SnapshotRow(id, pid, code, now, ttl,
+        inputs == null ? "" : inputs, results == null ? "" : results,
+        materials == null ? "" : materials, internalCost, quoteValue, workHours,
+        drawPayload == null ? "" : drawPayload, note == null ? "" : note));
+    while (rows.size() > 3000) rows.remove(rows.size() - 1);
+    gcPv2Store(GC_PV2_SNAPSHOTS, rows);
+    gcPv2AppendLog(pid, "SNAPSHOT", code + " · " + ttl);
+    return id;
+  }
+
+  @SimpleFunction(description="Captures the current GateCraft calculator screen with one lightweight call and stores it as a snapshot under the active project.")
+  public String ProjectV2CaptureCurrentScreen(String moduleCode, String title) {
+    String[] values = gcPv2CaptureScreenValues();
+    return ProjectV2AddSnapshot(moduleCode, title, values[0], values[1], "", 0.0d, 0.0d, 0.0d, "", "");
+  }
+
+  @SimpleFunction(description="Returns all Project Center 2.0 snapshots for one project id, newest first.")
+  public YailList ProjectV2Snapshots(String projectId) {
+    java.util.ArrayList<Object> out = new java.util.ArrayList<Object>();
+    for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() >= 13 && mdString(r.get(1)).equals(projectId)) out.add(x);
+    }
+    return YailList.makeList(out);
+  }
+
+  private double[] gcPv2Stats(String projectId) {
+    double count = 0, drawings = 0, cost = 0, quote = 0, work = 0, last = 0;
+    for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() < 13 || !mdString(r.get(1)).equals(projectId)) continue;
+      count += 1;
+      double when = SafeNumber(r.get(3), 0); if (when > last) last = when;
+      cost += SafeNumber(r.get(8), 0); quote += SafeNumber(r.get(9), 0); work += SafeNumber(r.get(10), 0);
+      if (mdString(r.get(11)).trim().length() > 0) drawings += 1;
+    }
+    return new double[]{count, drawings, cost, quote, work, last};
+  }
+
+  @SimpleFunction(description="Returns active Project Center 2.0 statistics [snapshotCount,drawingCount,internalCost,quoteValue,workHours,lastActivityMs].")
+  public YailList ProjectV2ActiveStats() {
+    double[] s = gcPv2Stats(gcPv2ActiveId());
+    return list(s[0], s[1], s[2], s[3], s[4], s[5]);
+  }
+
+  private String gcPv2Text(String key, int lang) {
+    String[][] t = new String[][]{
+      {"ACTIVE","Aktív projekt","Active project","Aktives Projekt","Proyecto activo","Projet actif","当前项目","Progetto attivo","Projeto ativo","Aktywny projekt","Actief project","Proiect activ","Активный проект"},
+      {"NONE","Nincs aktív projekt","No active project","Kein aktives Projekt","Sin proyecto activo","Aucun projet actif","无当前项目","Nessun progetto attivo","Sem projeto ativo","Brak aktywnego projektu","Geen actief project","Niciun proiect activ","Нет активного проекта"},
+      {"SAVE","Projektbe mentés","Save to project","Im Projekt speichern","Guardar en proyecto","Enregistrer dans le projet","保存到项目","Salva nel progetto","Guardar no projeto","Zapisz do projektu","Opslaan in project","Salvează în proiect","Сохранить в проект"},
+      {"SAVED","Mentve","Saved","Gespeichert","Guardado","Enregistré","已保存","Salvato","Guardado","Zapisano","Opgeslagen","Salvat","Сохранено"},
+      {"DASH","Projekt áttekintő","Project dashboard","Projektübersicht","Panel del proyecto","Tableau du projet","项目概览","Panoramica progetto","Painel do projeto","Panel projektu","Projectoverzicht","Panou proiect","Обзор проекта"},
+      {"DATA","Adatok","Data","Daten","Datos","Données","数据","Dati","Dados","Dane","Gegevens","Date","Данные"},
+      {"CALCS","Kalkulációk","Calculations","Kalkulationen","Cálculos","Calculs","计算","Calcoli","Cálculos","Kalkulacje","Berekeningen","Calcule","Расчёты"},
+      {"MATERIALS","Anyagok","Materials","Materialien","Materiales","Matériaux","材料","Materiali","Materiais","Materiały","Materialen","Materiale","Материалы"},
+      {"DRAWINGS","Rajzok","Drawings","Zeichnungen","Planos","Dessins","图纸","Disegni","Desenhos","Rysunki","Tekeningen","Desene","Чертежи"},
+      {"QUOTE","Ajánlat","Quote","Angebot","Oferta","Devis","报价","Preventivo","Orçamento","Oferta","Offerte","Ofertă","Предложение"},
+      {"COSTS","Költségek","Costs","Kosten","Costes","Coûts","成本","Costi","Custos","Koszty","Kosten","Costuri","Затраты"},
+      {"WORK","Munka","Work","Arbeit","Trabajo","Travail","工时","Lavoro","Trabalho","Praca","Werk","Muncă","Работа"},
+      {"LOG","Napló","Log","Protokoll","Registro","Journal","日志","Registro","Registo","Dziennik","Logboek","Jurnal","Журнал"},
+      {"SNAPS","Mentett kalkuláció","Saved calculations","Gespeicherte Kalkulationen","Cálculos guardados","Calculs enregistrés","已保存计算","Calcoli salvati","Cálculos guardados","Zapisane kalkulacje","Opgeslagen berekeningen","Calcule salvate","Сохранённые расчёты"},
+      {"DRAWCOUNT","Mentett rajz","Saved drawings","Gespeicherte Zeichnungen","Planos guardados","Dessins enregistrés","已保存图纸","Disegni salvati","Desenhos guardados","Zapisane rysunki","Opgeslagen tekeningen","Desene salvate","Сохранённые чертежи"},
+      {"NEXT","A következő fejlesztési fázisban kapcsolódik ide.","Connected here in the next development phase.","Wird in der nächsten Entwicklungsphase angebunden.","Se conectará aquí en la siguiente fase.","Sera relié ici lors de la prochaine phase.","将在下一开发阶段接入。","Sarà collegato nella prossima fase.","Será ligado aqui na próxima fase.","Zostanie podłączone w następnym etapie.","Wordt hier in de volgende fase gekoppeld.","Va fi conectat aici în etapa următoare.","Будет подключено на следующем этапе."}
+    };
+    int l = lang < 1 || lang > 12 ? 2 : lang;
+    for (String[] r : t) if (r[0].equals(key)) return r[l];
+    return key;
+  }
+
+  private String gcPv2Date(double ms) {
+    if (ms <= 0) return "-";
+    try { return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(new java.util.Date((long) Math.round(ms))); }
+    catch (Throwable ex) { return "-"; }
+  }
+
+  @SimpleFunction(description="Returns localized Project Center 2.0 dashboard text for DATA/CALCS/MATERIALS/DRAWINGS/QUOTE/COSTS/WORK/LOG.")
+  public String ProjectV2DashboardText(String section) {
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    String pid = gcPv2ActiveId();
+    if (pid.length() == 0) return gcPv2Text("NONE", lang);
+    String sec = section == null ? "DATA" : section.trim().toUpperCase(java.util.Locale.ROOT);
+    java.util.ArrayList<Object> pr = mdList(ProjectHubGet(pid));
+    double[] st = gcPv2Stats(pid);
+    StringBuilder out = new StringBuilder();
+    if ("DATA".equals(sec)) {
+      if (pr.size() >= 9) {
+        out.append(gcPv2Text("ACTIVE",lang)).append(": ").append(mdString(pr.get(1))).append('\n');
+        out.append(gcProjectUiText("CLIENT",lang)).append(": ").append(mdString(pr.get(2))).append('\n');
+        out.append(gcProjectUiText("SITE",lang)).append(": ").append(mdString(pr.get(3))).append('\n');
+        out.append(gcProjectUiText("TYPE",lang)).append(": ").append(mdString(pr.get(4))).append('\n');
+        out.append(gcProjectUiText("STATUS",lang)).append(": ").append(gcProjectStatus(mdString(pr.get(5)),lang)).append('\n');
+        out.append(gcProjectUiText("NOTE",lang)).append(": ").append(mdString(pr.get(6)));
+      }
+    } else if ("CALCS".equals(sec)) {
+      out.append(gcPv2Text("SNAPS",lang)).append(": ").append((int) st[0]).append('\n');
+      int shown = 0;
+      for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+        java.util.ArrayList<Object> r = mdList(x);
+        if (r.size() < 13 || !pid.equals(mdString(r.get(1)))) continue;
+        out.append("• ").append(mdString(r.get(4))).append(" · ").append(mdString(r.get(2))).append(" · ").append(gcPv2Date(SafeNumber(r.get(3),0))).append('\n');
+        if (++shown >= 12) break;
+      }
+    } else if ("DRAWINGS".equals(sec)) {
+      out.append(gcPv2Text("DRAWCOUNT",lang)).append(": ").append((int) st[1]).append('\n').append(gcPv2Text("NEXT",lang));
+    } else if ("COSTS".equals(sec)) {
+      out.append(gcPv2Text("COSTS",lang)).append(": ").append(Round2(st[2])).append('\n').append(gcPv2Text("NEXT",lang));
+    } else if ("QUOTE".equals(sec)) {
+      out.append(gcPv2Text("QUOTE",lang)).append(": ").append(Round2(st[3])).append('\n').append(gcPv2Text("NEXT",lang));
+    } else if ("WORK".equals(sec)) {
+      out.append(gcPv2Text("WORK",lang)).append(": ").append(Round2(st[4])).append(" h\n").append(gcPv2Text("NEXT",lang));
+    } else if ("LOG".equals(sec)) {
+      int shown = 0;
+      for (Object x : gcPv2Rows(GC_PV2_LOG)) {
+        java.util.ArrayList<Object> r = mdList(x);
+        if (r.size() < 5 || !pid.equals(mdString(r.get(1)))) continue;
+        out.append("• ").append(gcPv2Date(SafeNumber(r.get(2),0))).append(" · ").append(mdString(r.get(3))).append(" · ").append(mdString(r.get(4))).append('\n');
+        if (++shown >= 16) break;
+      }
+      if (shown == 0) out.append("-");
+    } else {
+      out.append(gcPv2Text("NEXT",lang));
+    }
+    return out.toString().trim();
+  }
+
+  private int[] gcPv2Palette() {
+    String code = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default").toLowerCase(java.util.Locale.ROOT);
+    if ("marka1".equals(code)) return new int[]{0xFF00A99D,0xFF101010,0xFFFFFFFF};
+    if ("marka2".equals(code)) return new int[]{0xFFFFC20E,0xFF111111,0xFF111111};
+    if ("marka3".equals(code)) return new int[]{0xFFD71920,0xFF111111,0xFFFFFFFF};
+    return new int[]{0xFF5B6670,0xFFF2F4F5,0xFFFFFFFF};
+  }
+
+  private void gcPv2Style(Object label, Object button) {
+    int[] p = gcPv2Palette();
+    if (label != null) {
+      gcSetProperty(label, "BackgroundColor", Integer.valueOf(p[1]));
+      gcSetProperty(label, "TextColor", Integer.valueOf("marka2".equals(gcPlatformString(gcPlatformTinyGet("kozos_tema","default"),"default")) ? 0xFF111111 : (p[1] == 0xFFF2F4F5 ? 0xFF111111 : 0xFFFFFFFF)));
+    }
+    if (button != null) {
+      gcSetProperty(button, "Image", "");
+      gcSetProperty(button, "BackgroundColor", Integer.valueOf(p[0]));
+      gcSetProperty(button, "TextColor", Integer.valueOf(p[2]));
+    }
+  }
+
+  @SimpleFunction(description="Applies active-project text, 12-language save caption and current GateCraft theme to all lightweight Project V2 module bars on the current screen.")
+  public void ProjectV2ApplyCurrentScreenUi() {
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+    String name = ProjectV2ActiveName();
+    for (java.util.Map.Entry<String,Object> e : map.entrySet()) {
+      String n = e.getKey() == null ? "" : e.getKey();
+      if (!n.startsWith("LBL_PV2_ACTIVE_")) continue;
+      String suffix = n.substring("LBL_PV2_ACTIVE_".length());
+      Object label = e.getValue();
+      Object button = map.get("BTN_PV2_SAVE_" + suffix);
+      gcSetProperty(label, "Text", name.length() == 0 ? gcPv2Text("NONE",lang) : "📁 " + name);
+      if (button != null) {
+        gcSetProperty(button, "Text", gcPv2Text("SAVE",lang));
+        gcSetProperty(button, "Enabled", Boolean.valueOf(name.length() > 0));
+      }
+      gcPv2Style(label, button);
+    }
+  }
+
+  @SimpleFunction(description="Captures the current screen into the active project and immediately updates the lightweight module save bar.")
+  public String ProjectV2CaptureAndApply(String moduleCode, String title) {
+    String result = ProjectV2CaptureCurrentScreen(moduleCode, title);
+    ProjectV2ApplyCurrentScreenUi();
+    if (!result.startsWith("ERR:")) {
+      int lang = (int) Math.round(PlatformLanguagePreference());
+      java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+      Object b = map.get("BTN_PV2_SAVE_" + (moduleCode == null ? "" : moduleCode.toUpperCase(java.util.Locale.ROOT)));
+      if (b != null) gcSetProperty(b, "Text", gcPv2Text("SAVED",lang) + " ✓");
+    }
+    return result;
+  }
+
+  private void gcPv2Prune() {
+    java.util.HashSet<String> ids = new java.util.HashSet<String>();
+    for (Object x : gcProjectRows()) { java.util.ArrayList<Object> r = mdList(x); if (r.size() > 0) ids.add(mdString(r.get(0))); }
+    String[] keys = new String[]{GC_PV2_SNAPSHOTS, GC_PV2_LOG};
+    for (String key : keys) {
+      java.util.ArrayList<Object> rows = gcPv2Rows(key); boolean changed = false;
+      for (int i = rows.size() - 1; i >= 0; i--) {
+        java.util.ArrayList<Object> r = mdList(rows.get(i));
+        if (r.size() < 2 || !ids.contains(mdString(r.get(1)))) { rows.remove(i); changed = true; }
+      }
+      if (changed) gcPv2Store(key, rows);
+    }
+    String active = gcPv2ActiveId();
+    if (active.length() > 0 && !ids.contains(active)) { gcPlatformTinyPut(GC_PV2_ACTIVE_ID, ""); gcPlatformTinyPut(GC_PV2_ACTIVE_NAME, ""); }
+  }
+
+  @SimpleFunction(description="Refreshes the Project Center 2.0 dashboard widgets in Screen_EngineeringLab with 12-language text and current theme.")
+  public void ProjectV2RefreshUi() {
+    gcPv2Prune();
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    java.util.HashMap<String,Object> map = gcBuildNamedComponentMap();
+    String name = ProjectV2ActiveName();
+    double[] st = gcPv2Stats(gcPv2ActiveId());
+    Object active = map.get("LBL_PROJECT_V2_ACTIVE");
+    Object stats = map.get("LBL_PROJECT_V2_STATS");
+    Object body = map.get("LBL_PROJECT_V2_BODY");
+    if (active != null) gcSetProperty(active,"Text", name.length()==0 ? gcPv2Text("NONE",lang) : "📁 " + gcPv2Text("ACTIVE",lang) + ": " + name);
+    if (stats != null) gcSetProperty(stats,"Text", gcPv2Text("SNAPS",lang)+": "+(int)st[0]+"   ·   "+gcPv2Text("DRAWCOUNT",lang)+": "+(int)st[1]);
+    if (body != null) gcSetProperty(body,"Text", ProjectV2DashboardText("DATA"));
+    String[][] buttons = new String[][]{{"BTN_PROJECT_V2_DATA","DATA"},{"BTN_PROJECT_V2_CALCS","CALCS"},{"BTN_PROJECT_V2_MATERIALS","MATERIALS"},{"BTN_PROJECT_V2_DRAWINGS","DRAWINGS"},{"BTN_PROJECT_V2_QUOTE","QUOTE"},{"BTN_PROJECT_V2_COSTS","COSTS"},{"BTN_PROJECT_V2_WORK","WORK"},{"BTN_PROJECT_V2_LOG","LOG"}};
+    for (String[] x : buttons) { Object b=map.get(x[0]); if(b!=null){ gcSetProperty(b,"Text",gcPv2Text(x[1],lang)); gcPv2Style(null,b); } }
+    gcPv2Style(active,null); gcPv2Style(stats,null); gcPv2Style(body,null);
+  }
+
+  @SimpleFunction(description="Switches the visible Project Center 2.0 dashboard section without adding heavy Blockly logic.")
+  public void ProjectV2ApplyDashboardSection(String section) {
+    java.util.HashMap<String,Object> map=gcBuildNamedComponentMap(); Object body=map.get("LBL_PROJECT_V2_BODY");
+    if(body!=null)gcSetProperty(body,"Text",ProjectV2DashboardText(section));
+  }
