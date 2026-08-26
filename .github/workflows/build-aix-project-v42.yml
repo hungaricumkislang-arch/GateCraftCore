@@ -65,7 +65,7 @@ jobs:
               raise SystemExit('Could not locate class closing brace')
           s = s[:pos] + '\n' + '\n'.join(fragments) + '\n' + s[pos:]
           old = '''  public void PlatformApplyCurrentUi() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyModernFourTheme();\n  }'''
-          new = '''  public void PlatformApplyCurrentUi() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyModernFourTheme();\n    gcV38ApplyModernExtras();\n  }'''
+          new = '''  public void PlatformApplyCurrentUi() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyModernFourTheme();\n    gcV38ApplyModernExtras();\n    ProjectV2ApplyCurrentScreenUi();\n  }'''
           if old not in s:
               raise SystemExit('PlatformApplyCurrentUi source pattern not found exactly')
           s = s.replace(old, new, 1)
