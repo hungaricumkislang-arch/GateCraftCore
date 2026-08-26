@@ -74,6 +74,11 @@ jobs:
           if old2 not in s:
               raise SystemExit('PlatformPrepareScreen1Ui source pattern not found exactly')
           s = s.replace(old2, new2, 1)
+          old3 = '''  public void PlatformApplySavedThemeLayout() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    String layout = gcPlatformString(gcPlatformTinyGet("kozos_layout", "CLASSIC"), "CLASSIC");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyLayoutCode(layout);\n  }'''
+          new3 = '''  public void PlatformApplySavedThemeLayout() {\n    String theme = gcPlatformString(gcPlatformTinyGet("kozos_tema", "default"), "default");\n    String layout = gcPlatformString(gcPlatformTinyGet("kozos_layout", "CLASSIC"), "CLASSIC");\n    PlatformApplyThemeCode(theme);\n    PlatformApplyLayoutCode(layout);\n    ProjectV2ApplyCurrentScreenUi();\n  }'''
+          if old3 not in s:
+              raise SystemExit('PlatformApplySavedThemeLayout source pattern not found exactly')
+          s = s.replace(old3, new3, 1)
           p.write_text(s, encoding='utf-8')
           print('patched', p)
           PY
