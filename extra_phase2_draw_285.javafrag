@@ -1,0 +1,33 @@
+  // ------------------------------------------------------------------
+  // GateCraft build285 exact drawing snapshot bridge.
+  // Runtime-only helper called through the already proven CenterAction API.
+  // No editor-visible component method is added.
+  // ------------------------------------------------------------------
+  private String gc285CaptureDrawingPayload(String payload) {
+    String pid = gcPv2ActiveId();
+    if (pid == null || pid.length() == 0) return "";
+    String raw = payload == null ? "" : payload.trim();
+    if (raw.length() == 0) return "";
+    int cut = raw.indexOf('|');
+    String code = (cut < 0 ? raw : raw.substring(0, cut)).trim().toUpperCase(java.util.Locale.ROOT);
+    boolean allowed = false;
+    for (String x : new String[]{"KISKAPU","SZARNYAS","TOLO","USZO","KERITES","ZSALU","TERKO","TRAPEZ","PANEL3D","LEPCSO"}) {
+      if (x.equals(code)) { allowed = true; break; }
+    }
+    if (!allowed) return "";
+
+    // Prevent duplicate rows when the same drawing is reopened unchanged.
+    for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() < 13) continue;
+      if (!pid.equals(mdString(r.get(1)))) continue;
+      if (!code.equalsIgnoreCase(mdString(r.get(2)))) continue;
+      if (!"DRAWING".equalsIgnoreCase(mdString(r.get(12)))) continue;
+      if (raw.equals(mdString(r.get(11)))) return mdString(r.get(0));
+      break;
+    }
+
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    String title = gcPv2ModuleTitle(code, lang);
+    return ProjectV2AddSnapshot(code, title, "", "", "", 0.0d, 0.0d, 0.0d, raw, "DRAWING");
+  }
