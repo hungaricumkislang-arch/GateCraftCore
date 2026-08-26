@@ -1,4 +1,4 @@
-name: Build GateCraftCore Project v4.2 compat41 AIX
+name: Build GateCraftCore Project v4.2 compat41 build285 draw bridge
 
 on:
   push:
@@ -97,22 +97,18 @@ jobs:
               raise SystemExit('Project V2 snapshot cap source pattern not found')
           s = s.replace(old6, new6, 1)
 
-          # build284: project bar label remains light in every theme; save button follows theme.
           old7 = '''      gcSetProperty(label, "BackgroundColor", Integer.valueOf(p[1]));\n      gcSetProperty(label, "TextColor", Integer.valueOf("marka2".equals(gcPlatformString(gcPlatformTinyGet("kozos_tema","default"),"default")) ? 0xFF111111 : (p[1] == 0xFFF2F4F5 ? 0xFF111111 : 0xFFFFFFFF)));'''
           new7 = '''      gcSetProperty(label, "BackgroundColor", Integer.valueOf(0x00FFFFFF));\n      gcSetProperty(label, "TextColor", Integer.valueOf(0xFF111111));'''
           if old7 not in s:
               raise SystemExit('Project V2 label style source pattern not found')
           s = s.replace(old7, new7, 1)
 
-          # build284: all Screen1 clear-module buttons get real 12-language captions.
           old8 = '    gcV38Set(m,"BTN_MODULE_CLEAR_BACK","Text",gcV38L("BACK",l));'
           new8 = old8 + '\n    gc284ApplyModuleClearTexts(m,l);'
           if old8 not in s:
               raise SystemExit('Screen1 clear-language source pattern not found')
           s = s.replace(old8, new8, 1)
 
-          # build284: delayed Project Center opening must finish with V2 refresh after
-          # the generic Center theme, otherwise static Hungarian text/theme can win.
           old9 = 'gcCApplyTexts(m);gcCApplyTheme(m);gcCTextSet(m,"LBL_GC_PageTitle",gcCPageTitle(gcCenterPage));'
           new9 = 'gcCApplyTexts(m);gcCApplyTheme(m);if("PROJECT".equals(gcCenterPage)){ProjectV2RefreshUi();gc284ApplyProjectFieldTexts(m,gcCLang());}gcCTextSet(m,"LBL_GC_PageTitle",gcCPageTitle(gcCenterPage));'
           if old9 not in s:
@@ -129,6 +125,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-v42-runtime-v41-editor-compat-aix-hotfix284
+          name: GateCraftCore-v42-runtime-v41-editor-compat-aix-build285-draw
           path: buildenv/out/*.aix
           if-no-files-found: error
