@@ -58,7 +58,7 @@ jobs:
               'extra_center_native_v38_03.javafrag', 'extra_center_native_v38_04.javafrag',
               'extra_center_native_v38_05.javafrag', 'extra_ui_v38.javafrag',
               'extra_release_v40.javafrag', 'extra_fullfix_v41.javafrag',
-              'extra_projecthub_v42.javafrag']:
+              'extra_projecthub_v42.javafrag', 'extra_projecthub_v42_ui.javafrag']:
               fragments.append(Path(fp).read_text(encoding='utf-8'))
           pos = s.rfind('}')
           if pos < 0:
