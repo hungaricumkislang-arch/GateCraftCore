@@ -1,8 +1,8 @@
-name: Build GateCraftCore Project v4.2 AIX
+name: Build GateCraftCore Project v4.2 compat41 AIX
 
 on:
   push:
-    branches: [ gatecraft-project-v42 ]
+    branches: [ gatecraft-project-v42-compat41 ]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
           rm -rf buildenv/src/*
           cat source_bundle/part*.txt | base64 --decode > /tmp/gatecraftcore-src.tar.gz
           tar -xzf /tmp/gatecraftcore-src.tar.gz -C buildenv/src
-      - name: Inject GateCraftCore v4.2 helpers
+      - name: Inject Project 2.0 runtime with v41 editor compatibility
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -39,8 +39,9 @@ jobs:
               raise SystemExit('Expected exactly one GateCraftCore.java, found %d' % len(matches))
           p = matches[0]
           s = p.read_text(encoding='utf-8')
-          s = s.replace('version = 10', 'version = 42', 1)
-          s = s.replace('return "1.0.0";', 'return "4.2.0";', 1)
+          # CRITICAL: keep the component annotation at the proven editor version 41.
+          s = s.replace('version = 10', 'version = 41', 1)
+          s = s.replace('return "1.0.0";', 'return "4.1.0";', 1)
           fragments = []
           for fp in [
               'extra_methods.javafrag', 'extra_names.javafrag', 'extra_algorithms.javafrag',
@@ -104,6 +105,6 @@ jobs:
       - name: Upload AIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftCore-v4.2-project-aix
+          name: GateCraftCore-v42-runtime-v41-editor-compat-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
