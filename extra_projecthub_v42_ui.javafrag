@@ -1,0 +1,5 @@
+  // Project Center 2.0 lightweight Blockly wrapper.
+  @SimpleFunction(description="Saves the current calculator screen to the active Project Center 2.0 project and refreshes the module project bar.")
+  public void ProjectV2SaveCurrentScreen(String moduleCode, String title) {
+    ProjectV2CaptureAndApply(moduleCode, title);
+  }
