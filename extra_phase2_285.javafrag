@@ -1,0 +1,235 @@
+  // ------------------------------------------------------------------
+  // GateCraft build285 Project Center 2.0 phase 2.
+  // Runtime-only dashboard enrichment. No new editor-visible API.
+  // ------------------------------------------------------------------
+  private static final String GC_PV2_SECTION_KEY = "GC_PROJECT_SECTION_V2";
+
+  private String gc285SectionCode(String section) {
+    String s = section == null ? "" : section.trim().toUpperCase(java.util.Locale.ROOT);
+    for (String x : new String[]{"DATA","CALCS","MATERIALS","DRAWINGS","QUOTE","COSTS","WORK","LOG"}) if (x.equals(s)) return s;
+    return "DATA";
+  }
+
+  private String gc285SavedSection() {
+    return gc285SectionCode(gcPlatformString(gcPlatformTinyGet(GC_PV2_SECTION_KEY, "DATA"), "DATA"));
+  }
+
+  private void gc285RememberSection(String section) {
+    gcPlatformTinyPut(GC_PV2_SECTION_KEY, gc285SectionCode(section));
+  }
+
+  private String gc285Text(String key, int lang) {
+    int l = lang < 1 || lang > 12 ? 2 : lang;
+    String[][] t = new String[][]{
+      {"CREATED","Létrehozva","Created","Erstellt","Creado","Créé","创建","Creato","Criado","Utworzono","Aangemaakt","Creat","Создано"},
+      {"UPDATED","Frissítve","Updated","Aktualisiert","Actualizado","Mis à jour","更新","Aggiornato","Atualizado","Zaktualizowano","Bijgewerkt","Actualizat","Обновлено"},
+      {"LAST","Utolsó aktivitás","Last activity","Letzte Aktivität","Última actividad","Dernière activité","最近活动","Ultima attività","Última atividade","Ostatnia aktywność","Laatste activiteit","Ultima activitate","Последняя активность"},
+      {"NO_CALCS","Nincs mentett kalkuláció.","No saved calculations.","Keine gespeicherten Berechnungen.","No hay cálculos guardados.","Aucun calcul enregistré.","没有已保存的计算。","Nessun calcolo salvato.","Sem cálculos guardados.","Brak zapisanych kalkulacji.","Geen opgeslagen berekeningen.","Nu există calcule salvate.","Нет сохранённых расчётов."},
+      {"NO_MATERIALS","Nincs projekthez kötött anyag- vagy költségtétel.","No project-bound material or cost items.","Keine projektbezogenen Material- oder Kostenpositionen.","No hay materiales o costes vinculados al proyecto.","Aucun matériau ou coût lié au projet.","没有项目材料或成本条目。","Nessun materiale o costo collegato al progetto.","Sem materiais ou custos ligados ao projeto.","Brak materiałów lub kosztów przypisanych do projektu.","Geen projectgebonden materiaal- of kostenregels.","Nu există materiale sau costuri asociate proiectului.","Нет материалов или затрат, привязанных к проекту."},
+      {"NO_DRAWINGS","Nincs projekthez mentett rajz.","No drawings saved to this project.","Keine Zeichnungen im Projekt gespeichert.","No hay planos guardados en este proyecto.","Aucun dessin enregistré dans ce projet.","此项目没有已保存图纸。","Nessun disegno salvato nel progetto.","Sem desenhos guardados neste projeto.","Brak rysunków zapisanych w projekcie.","Geen tekeningen in dit project opgeslagen.","Nu există desene salvate în proiect.","В проекте нет сохранённых чертежей."},
+      {"NO_QUOTE","Még nincs projekthez kötött ajánlati érték.","No project-bound quote value yet.","Noch kein projektbezogener Angebotswert.","Aún no hay un valor de oferta vinculado al proyecto.","Aucune valeur de devis liée au projet.","尚无项目报价金额。","Nessun valore preventivo collegato al progetto.","Ainda não existe valor de orçamento ligado ao projeto.","Brak wartości oferty przypisanej do projektu.","Nog geen projectgebonden offertewaarde.","Nu există încă o valoare de ofertă asociată proiectului.","Пока нет суммы предложения, привязанной к проекту."},
+      {"NO_COSTS","Nincs projekthez rögzített költség.","No project costs recorded.","Keine Projektkosten erfasst.","No hay costes del proyecto registrados.","Aucun coût de projet enregistré.","没有记录项目成本。","Nessun costo progetto registrato.","Sem custos de projeto registados.","Brak zapisanych kosztów projektu.","Geen projectkosten geregistreerd.","Nu există costuri de proiect înregistrate.","Нет зарегистрированных затрат проекта."},
+      {"NO_WORK","Nincs projekthez rögzített munkaidő.","No project work time recorded.","Keine Projektarbeitszeit erfasst.","No hay tiempo de trabajo registrado.","Aucun temps de travail enregistré.","没有记录项目工时。","Nessun tempo di lavoro registrato.","Sem tempo de trabalho registado.","Brak zapisanego czasu pracy.","Geen projectwerktijd geregistreerd.","Nu există timp de lucru înregistrat.","Нет зарегистрированного рабочего времени."},
+      {"PLAN","Tervezett","Planned","Geplant","Planificado","Prévu","计划","Pianificato","Planeado","Planowane","Gepland","Planificat","План"},
+      {"ACTUAL","Tényleges","Actual","Ist","Real","Réel","实际","Effettivo","Real","Rzeczywiste","Werkelijk","Real","Факт"},
+      {"MATERIAL_COST","Anyagköltség","Material cost","Materialkosten","Coste de material","Coût matière","材料成本","Costo materiale","Custo de material","Koszt materiału","Materiaalkosten","Cost material","Стоимость материалов"},
+      {"LABOR","Munkadíj","Labor","Arbeit","Mano de obra","Main-d’œuvre","人工","Manodopera","Mão de obra","Robocizna","Arbeid","Manoperă","Работа"},
+      {"TOTAL","Összesen","Total","Gesamt","Total","Total","合计","Totale","Total","Razem","Totaal","Total","Итого"},
+      {"HOURS","Munkaóra","Work hours","Arbeitsstunden","Horas de trabajo","Heures de travail","工时","Ore di lavoro","Horas de trabalho","Godziny pracy","Werkuren","Ore de lucru","Рабочие часы"},
+      {"RUNNING","Időmérés fut","Timer running","Timer läuft","Temporizador activo","Chrono en cours","计时器运行中","Timer attivo","Cronómetro ativo","Pomiar czasu trwa","Timer loopt","Cronometru activ","Таймер запущен"},
+      {"LATEST_QUOTE","Legutóbbi ajánlati érték","Latest quote value","Letzter Angebotswert","Último valor de oferta","Dernière valeur de devis","最新报价","Ultimo valore preventivo","Último valor de orçamento","Ostatnia wartość oferty","Laatste offertewaarde","Ultima valoare ofertă","Последняя сумма предложения"},
+      {"ITEMS","Tétel","Items","Positionen","Elementos","Éléments","条目","Voci","Itens","Pozycje","Regels","Elemente","Позиции"},
+      {"RESULT","Eredmény","Result","Ergebnis","Resultado","Résultat","结果","Risultato","Resultado","Wynik","Resultaat","Rezultat","Результат"}
+    };
+    for (String[] r : t) if (r[0].equals(key)) return r[l];
+    return key;
+  }
+
+  private String gc285Currency() {
+    String c = gcPlatformString(gcPlatformTinyGet("GC_PROFILE_CURRENCY", ""), "").trim();
+    if (c.length() == 0) c = gcPlatformString(gcPlatformTinyGet("currncy", ""), "").trim();
+    return c;
+  }
+
+  private String gc285Money(double value) {
+    String c = gc285Currency();
+    return FormatNumber(value, 2, false, false) + (c.length() == 0 ? "" : " " + c);
+  }
+
+  private String gc285CompactResult(String raw) {
+    if (raw == null || raw.trim().length() == 0) return "";
+    String[] lines = raw.split("\\r?\\n");
+    StringBuilder out = new StringBuilder();
+    int shown = 0;
+    for (String line : lines) {
+      if (line == null) continue;
+      String s = line.trim();
+      if (s.length() == 0) continue;
+      if (s.length() > 80) s = s.substring(0, 80) + "…";
+      if (out.length() > 0) out.append(" · ");
+      out.append(s);
+      if (++shown >= 2) break;
+    }
+    return out.toString();
+  }
+
+  private double[] gc285BusinessStats(String pid) {
+    double plan = 0, actualMaterial = 0, labor = 0, hours = 0;
+    for (Object x : gcBusRows(GC_BUS_COSTS)) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() < 11 || !pid.equals(gcBusS(r.get(1)))) continue;
+      if ("PLAN".equalsIgnoreCase(gcBusS(r.get(2)))) plan += gcBusNum(r.get(7));
+      else actualMaterial += gcBusNum(r.get(7));
+    }
+    for (Object x : gcBusRows(GC_BUS_TIMES)) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() < 9 || !pid.equals(gcBusS(r.get(1)))) continue;
+      hours += gcBusNum(r.get(5)) / 60.0d;
+      labor += gcBusNum(r.get(7));
+    }
+    return new double[]{plan, actualMaterial, labor, actualMaterial + labor, hours};
+  }
+
+  private double gc285LatestQuote(String pid) {
+    for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+      java.util.ArrayList<Object> r = mdList(x);
+      if (r.size() < 13 || !pid.equals(mdString(r.get(1)))) continue;
+      double q = SafeNumber(r.get(9), 0);
+      if (q > 0) return q;
+    }
+    return 0;
+  }
+
+  private String gc285DashboardText(String section) {
+    int lang = (int) Math.round(PlatformLanguagePreference());
+    String pid = gcPv2ActiveId();
+    if (pid.length() == 0) return gcPv2Text("NONE", lang);
+    String sec = gc285SectionCode(section);
+    java.util.ArrayList<Object> pr = mdList(ProjectHubGet(pid));
+    double[] st = gcPv2Stats(pid);
+    double[] bs = gc285BusinessStats(pid);
+    StringBuilder out = new StringBuilder();
+
+    if ("DATA".equals(sec)) {
+      if (pr.size() >= 9) {
+        out.append(gcPv2Text("ACTIVE",lang)).append(": ").append(mdString(pr.get(1))).append('\n');
+        out.append(gcProjectUiText("CLIENT",lang)).append(": ").append(mdString(pr.get(2))).append('\n');
+        out.append(gcProjectUiText("SITE",lang)).append(": ").append(mdString(pr.get(3))).append('\n');
+        out.append(gcProjectUiText("TYPE",lang)).append(": ").append(mdString(pr.get(4))).append('\n');
+        out.append(gcProjectUiText("STATUS",lang)).append(": ").append(gcProjectStatus(mdString(pr.get(5)),lang)).append('\n');
+        out.append(gcProjectUiText("NOTE",lang)).append(": ").append(mdString(pr.get(6))).append('\n');
+        out.append(gc285Text("CREATED",lang)).append(": ").append(gcPv2Date(SafeNumber(pr.get(7),0))).append('\n');
+        out.append(gc285Text("UPDATED",lang)).append(": ").append(gcPv2Date(SafeNumber(pr.get(8),0))).append('\n');
+      }
+      out.append(gcPv2Text("SNAPS",lang)).append(": ").append((int)st[0]).append(" · ")
+          .append(gc285Text("HOURS",lang)).append(": ").append(FormatNumber(bs[4],2,false,false)).append(" h");
+      if (st[5] > 0) out.append('\n').append(gc285Text("LAST",lang)).append(": ").append(gcPv2Date(st[5]));
+      return out.toString().trim();
+    }
+
+    if ("CALCS".equals(sec)) {
+      int shown = 0;
+      for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+        java.util.ArrayList<Object> r = mdList(x);
+        if (r.size() < 13 || !pid.equals(mdString(r.get(1)))) continue;
+        String code = mdString(r.get(2));
+        String title = mdString(r.get(4));
+        String result = gc285CompactResult(mdString(r.get(6)));
+        out.append("• ").append(gcPv2ModuleTitle(code,lang));
+        if (title.length() > 0 && !title.equalsIgnoreCase(code) && !title.equalsIgnoreCase(gcPv2ModuleTitle(code,lang))) out.append(" · ").append(title);
+        out.append(" · ").append(gcPv2Date(SafeNumber(r.get(3),0)));
+        if (result.length() > 0) out.append('\n').append("  ").append(gc285Text("RESULT",lang)).append(": ").append(result);
+        out.append('\n');
+        if (++shown >= 8) break;
+      }
+      if (shown == 0) out.append(gc285Text("NO_CALCS",lang));
+      return out.toString().trim();
+    }
+
+    if ("MATERIALS".equals(sec)) {
+      int shown = 0, totalItems = 0;
+      for (Object x : gcBusRows(GC_BUS_COSTS)) {
+        java.util.ArrayList<Object> r = mdList(x);
+        if (r.size() < 11 || !pid.equals(gcBusS(r.get(1)))) continue;
+        totalItems++;
+        if (shown >= 10) continue;
+        String mode = "ACTUAL".equalsIgnoreCase(gcBusS(r.get(2))) ? gc285Text("ACTUAL",lang) : gc285Text("PLAN",lang);
+        String desc = gcBusS(r.get(4)); if (desc.length() == 0) desc = gcBusS(r.get(3));
+        out.append("• [").append(mode).append("] ").append(desc.length()==0?"-":desc);
+        double q = gcBusNum(r.get(5)), unit = gcBusNum(r.get(6)), total = gcBusNum(r.get(7));
+        if (q > 0) out.append(" · ").append(FormatNumber(q,2,false,false)).append(" × ").append(gc285Money(unit));
+        if (total > 0) out.append(" = ").append(gc285Money(total));
+        out.append('\n');
+        shown++;
+      }
+      if (totalItems == 0) out.append(gc285Text("NO_MATERIALS",lang));
+      else out.insert(0, gc285Text("ITEMS",lang)+": "+totalItems+"\n");
+      return out.toString().trim();
+    }
+
+    if ("DRAWINGS".equals(sec)) {
+      int shown = 0;
+      for (Object x : gcPv2Rows(GC_PV2_SNAPSHOTS)) {
+        java.util.ArrayList<Object> r = mdList(x);
+        if (r.size() < 13 || !pid.equals(mdString(r.get(1)))) continue;
+        String dp = mdString(r.get(11)).trim();
+        if (dp.length() == 0) continue;
+        out.append("• ").append(gcPv2ModuleTitle(mdString(r.get(2)),lang)).append(" · ").append(gcPv2Date(SafeNumber(r.get(3),0))).append('\n');
+        if (++shown >= 10) break;
+      }
+      if (shown == 0) out.append(gc285Text("NO_DRAWINGS",lang));
+      else out.insert(0, gcPv2Text("DRAWCOUNT",lang)+": "+shown+"\n");
+      return out.toString().trim();
+    }
+
+    if ("QUOTE".equals(sec)) {
+      double q = gc285LatestQuote(pid);
+      if (q <= 0) return gc285Text("NO_QUOTE",lang);
+      return gc285Text("LATEST_QUOTE",lang)+": "+gc285Money(q);
+    }
+
+    if ("COSTS".equals(sec)) {
+      if (bs[0] == 0 && bs[1] == 0 && bs[2] == 0) return gc285Text("NO_COSTS",lang);
+      out.append(gc285Text("PLAN",lang)).append(": ").append(gc285Money(bs[0])).append('\n');
+      out.append(gc285Text("MATERIAL_COST",lang)).append(" (").append(gc285Text("ACTUAL",lang)).append("): ").append(gc285Money(bs[1])).append('\n');
+      out.append(gc285Text("LABOR",lang)).append(": ").append(gc285Money(bs[2])).append('\n');
+      out.append(gc285Text("TOTAL",lang)).append(": ").append(gc285Money(bs[3]));
+      return out.toString().trim();
+    }
+
+    if ("WORK".equals(sec)) {
+      int shown = 0; double totalMinutes = 0, totalCost = 0;
+      for (Object x : gcBusRows(GC_BUS_TIMES)) {
+        java.util.ArrayList<Object> r = mdList(x);
+        if (r.size() < 9 || !pid.equals(gcBusS(r.get(1)))) continue;
+        totalMinutes += gcBusNum(r.get(5)); totalCost += gcBusNum(r.get(7));
+        if (shown < 8) {
+          out.append("• ").append(gcBusS(r.get(2))).append(" · ").append(FormatNumber(gcBusNum(r.get(5))/60.0d,2,false,false)).append(" h");
+          if (gcBusNum(r.get(7)) > 0) out.append(" · ").append(gc285Money(gcBusNum(r.get(7))));
+          out.append('\n'); shown++;
+        }
+      }
+      java.util.ArrayList<Object> active = mdList(gcPlatformTinyGet(GC_BUS_ACTIVE_TIMER, YailList.makeEmptyList()));
+      boolean running = active.size() >= 6 && pid.equals(gcBusS(active.get(1)));
+      if (shown == 0 && !running) return gc285Text("NO_WORK",lang);
+      out.insert(0, gc285Text("HOURS",lang)+": "+FormatNumber(totalMinutes/60.0d,2,false,false)+" h · "+gc285Text("LABOR",lang)+": "+gc285Money(totalCost)+"\n");
+      if (running) out.append(gc285Text("RUNNING",lang)).append(": ").append(gcBusS(active.get(2)));
+      return out.toString().trim();
+    }
+
+    if ("LOG".equals(sec)) {
+      int shown = 0;
+      for (Object x : gcPv2Rows(GC_PV2_LOG)) {
+        java.util.ArrayList<Object> r = mdList(x);
+        if (r.size() < 5 || !pid.equals(mdString(r.get(1)))) continue;
+        out.append("• ").append(gcPv2Date(SafeNumber(r.get(2),0))).append(" · ").append(mdString(r.get(3)));
+        String d = mdString(r.get(4)); if (d.length() > 0) out.append(" · ").append(d);
+        out.append('\n');
+        if (++shown >= 16) break;
+      }
+      if (shown == 0) out.append("-");
+      return out.toString().trim();
+    }
+
+    return "";
+  }
