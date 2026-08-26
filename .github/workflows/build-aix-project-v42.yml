@@ -79,6 +79,21 @@ jobs:
           if old3 not in s:
               raise SystemExit('PlatformApplySavedThemeLayout source pattern not found exactly')
           s = s.replace(old3, new3, 1)
+          old4 = 'gcPlatformGetProperty(c, "Checked", Boolean.FALSE)'
+          new4 = 'gcPlatformGetProperty(c, c instanceof com.google.appinventor.components.runtime.Switch ? "On" : "Checked", Boolean.FALSE)'
+          if old4 not in s:
+              raise SystemExit('Project V2 CheckBox/Switch capture source pattern not found')
+          s = s.replace(old4, new4, 1)
+          old5 = 'if (inputs.length() > 18000 || results.length() > 18000) break;'
+          new5 = 'if (inputs.length() > 8000 || results.length() > 8000) break;'
+          if old5 not in s:
+              raise SystemExit('Project V2 capture size source pattern not found')
+          s = s.replace(old5, new5, 1)
+          old6 = 'while (rows.size() > 3000) rows.remove(rows.size() - 1);'
+          new6 = 'while (rows.size() > 600) rows.remove(rows.size() - 1);'
+          if old6 not in s:
+              raise SystemExit('Project V2 snapshot cap source pattern not found')
+          s = s.replace(old6, new6, 1)
           p.write_text(s, encoding='utf-8')
           print('patched', p)
           PY
