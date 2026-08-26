@@ -33,3 +33,17 @@
     };
     for (String[] x : map) gcV38Set(m, x[0], "Text", gc284ClearText(x[1], lang));
   }
+
+  private void gc284ApplyProjectFieldTexts(java.util.HashMap<String,Object> m, int lang) {
+    String[][] fields = new String[][]{
+      {"LBL_PROJECT_FIELD_NAME","NAME"}, {"LBL_PROJECT_FIELD_CLIENT","CLIENT"},
+      {"LBL_PROJECT_FIELD_SITE","SITE"}, {"LBL_PROJECT_FIELD_TYPE","TYPE"},
+      {"LBL_PROJECT_STATUS","STATUS"}, {"LBL_PROJECT_FIELD_NOTE","NOTE"}
+    };
+    for (String[] x : fields) {
+      Object c = m.get(x[0]);
+      if (c != null) gcSetProperty(c, "Text", gcProjectUiText(x[1], lang) + ":");
+    }
+    Object empty = m.get("LBL_PROJECT_EMPTY");
+    if (empty != null) gcSetProperty(empty, "Text", gcProjectUiText("EMPTY", lang));
+  }
