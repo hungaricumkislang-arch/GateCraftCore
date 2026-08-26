@@ -1,0 +1,44 @@
+name: Build GateCraftDrawing v2.2 AIX
+
+on:
+  push:
+    branches: [ gatecraft-project-v42-compat41-hotfix284 ]
+    paths:
+      - 'drawing_v22/**'
+      - '.github/workflows/build-drawing-v22.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant
+      - name: Get MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+      - name: Install GateCraftDrawing source
+        run: |
+          mkdir -p buildenv/src/com/gatecraft/drawing
+          cp drawing_v22/GateCraftDrawing.java buildenv/src/com/gatecraft/drawing/GateCraftDrawing.java
+      - name: Build AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+      - name: Upload AIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftDrawing-v2.2-html-pdf-sync-aix
+          path: buildenv/out/*.aix
+          if-no-files-found: error
