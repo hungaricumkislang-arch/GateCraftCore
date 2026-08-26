@@ -47,3 +47,13 @@
     Object empty = m.get("LBL_PROJECT_EMPTY");
     if (empty != null) gcSetProperty(empty, "Text", gcProjectUiText("EMPTY", lang));
   }
+
+  private void gc284KeepProjectBarsWhite() {
+    java.util.HashMap<String,Object> m = gcBuildNamedComponentMap();
+    for (java.util.Map.Entry<String,Object> e : m.entrySet()) {
+      String n = e.getKey() == null ? "" : e.getKey();
+      if (!n.startsWith("HA_PV2_")) continue;
+      Object c = e.getValue();
+      if (c != null) try { gcSetProperty(c, "BackgroundColor", Integer.valueOf(0xFFFFFFFF)); } catch (Throwable ignored) { }
+    }
+  }
