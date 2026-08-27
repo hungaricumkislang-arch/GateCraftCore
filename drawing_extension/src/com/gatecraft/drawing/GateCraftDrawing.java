@@ -1,18 +1,18 @@
 package com.gatecraft.drawing;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.ParcelFileDescriptor;
-import android.print.PageRange;
-import android.print.PrintAttributes;
-import android.print.PrintDocumentAdapter;
-import android.print.PrintDocumentInfo;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -34,6 +34,7 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -54,8 +55,7 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
     private volatile String lastPdfUri = "";
     private volatile boolean pdfBusy = false;
     private WebView renderWebView;
-    private PrintDocumentAdapter printAdapter;
-    private ParcelFileDescriptor printPfd;
+    private ViewGroup renderParent;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public GateCraftDrawing(ComponentContainer container) {
@@ -84,10 +84,6 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
             lastError = "PDF generation is already running";
             return false;
         }
-        if (Build.VERSION.SDK_INT < 19) {
-            lastError = "Android print PDF requires Android 4.4 or newer";
-            return false;
-        }
         pdfBusy = true;
         try {
             form.runOnUiThread(new Runnable() {
@@ -107,15 +103,27 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
             String html = loadDrawingHtml();
             if (html.length() == 0) throw new IllegalStateException("gatecraft_draw.html is empty");
             String injected = injectPayload(html, payload);
+
+            Activity activity = (Activity) context;
+            View rootView = activity.findViewById(android.R.id.content);
+            if (!(rootView instanceof ViewGroup)) throw new IllegalStateException("Android content root is unavailable");
+            renderParent = (ViewGroup) rootView;
+
             final WebView web = new WebView(context);
             renderWebView = web;
             web.setBackgroundColor(0xFFFFFFFF);
+            web.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+            web.setX(-10000f);
+            web.setY(-10000f);
+            renderParent.addView(web, new ViewGroup.LayoutParams(1200, 700));
+
             WebSettings settings = web.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setAllowFileAccess(true);
             settings.setAllowContentAccess(true);
             settings.setDomStorageEnabled(false);
             settings.setLoadsImagesAutomatically(true);
+
             web.setWebViewClient(new WebViewClient() {
                 private boolean completed = false;
                 @Override public void onPageFinished(WebView view, String url) {
@@ -146,7 +154,9 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
                     @Override public void onReceiveValue(String value) {
                         String v = value == null ? "" : value;
                         if (v.indexOf("READY") >= 0) {
-                            printWebViewToPdf(web, chooserTitle);
+                            mainHandler.postDelayed(new Runnable() {
+                                @Override public void run() { renderAttachedWebViewToPdf(web, chooserTitle); }
+                            }, 250L);
                         } else if (v.indexOf("ERR:") >= 0) {
                             failAsync(new IllegalStateException("Drawing render error: " + v));
                         } else {
@@ -161,67 +171,77 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
         }
     }
 
-    private void printWebViewToPdf(final WebView web, final String chooserTitle) {
+    private void renderAttachedWebViewToPdf(WebView web, String chooserTitle) {
+        Bitmap bitmap = null;
+        PdfDocument pdf = null;
+        FileOutputStream out = null;
         try {
-            if (web != renderWebView) throw new IllegalStateException("PDF renderer replaced");
-            final File outFile = createOutputFile();
-            final PrintAttributes attrs = new PrintAttributes.Builder()
-                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())
-                    .setResolution(new PrintAttributes.Resolution("gc_pdf", "GateCraft PDF", 600, 600))
-                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                    .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-                    .build();
-            final PrintDocumentAdapter adapter = Build.VERSION.SDK_INT >= 21
-                    ? web.createPrintDocumentAdapter("GateCraft Drawing")
-                    : web.createPrintDocumentAdapter();
-            printAdapter = adapter;
-            adapter.onLayout(attrs, attrs, new CancellationSignal(), new PrintDocumentAdapter.LayoutResultCallback() {
-                @Override public void onLayoutFinished(PrintDocumentInfo info, boolean changed) {
-                    try {
-                        printPfd = ParcelFileDescriptor.open(outFile,
-                                ParcelFileDescriptor.MODE_CREATE |
-                                ParcelFileDescriptor.MODE_TRUNCATE |
-                                ParcelFileDescriptor.MODE_READ_WRITE);
-                        final ParcelFileDescriptor pfd = printPfd;
-                        adapter.onWrite(new PageRange[]{PageRange.ALL_PAGES}, pfd, new CancellationSignal(),
-                                new PrintDocumentAdapter.WriteResultCallback() {
-                                    @Override public void onWriteFinished(PageRange[] pages) {
-                                        closePrintPfd();
-                                        mainHandler.post(new Runnable() {
-                                            @Override public void run() {
-                                                try {
-                                                    validatePdf(outFile);
-                                                    sharePdf(outFile, chooserTitle);
-                                                } catch (Throwable t) {
-                                                    failAsync(t);
-                                                }
-                                            }
-                                        });
-                                    }
-                                    @Override public void onWriteFailed(CharSequence error) {
-                                        closePrintPfd();
-                                        failAsync(new IllegalStateException("PDF write failed: " + String.valueOf(error)));
-                                    }
-                                    @Override public void onWriteCancelled() {
-                                        closePrintPfd();
-                                        failAsync(new IllegalStateException("PDF write cancelled"));
-                                    }
-                                });
-                    } catch (Throwable t) {
-                        closePrintPfd();
-                        failAsync(t);
-                    }
-                }
-                @Override public void onLayoutFailed(CharSequence error) {
-                    failAsync(new IllegalStateException("PDF layout failed: " + String.valueOf(error)));
-                }
-                @Override public void onLayoutCancelled() {
-                    failAsync(new IllegalStateException("PDF layout cancelled"));
-                }
-            }, new Bundle());
+            if (web != renderWebView || web.getParent() == null) throw new IllegalStateException("PDF WebView is not attached");
+            int wSpec = View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.EXACTLY);
+            int hSpec = View.MeasureSpec.makeMeasureSpec(700, View.MeasureSpec.EXACTLY);
+            web.measure(wSpec, hSpec);
+            web.layout(0, 0, 1200, 700);
+            web.invalidate();
+
+            bitmap = Bitmap.createBitmap(1200, 700, Bitmap.Config.ARGB_8888);
+            Canvas capture = new Canvas(bitmap);
+            capture.drawColor(0xFFFFFFFF);
+            web.draw(capture);
+            validateBitmap(bitmap);
+
+            pdf = new PdfDocument();
+            PdfDocument.PageInfo info = new PdfDocument.PageInfo.Builder(842, 595, 1).create();
+            PdfDocument.Page page = pdf.startPage(info);
+            Canvas canvas = page.getCanvas();
+            canvas.drawColor(0xFFFFFFFF);
+            float margin = 22f;
+            float scale = Math.min((842f - 2f * margin) / 1200f, (595f - 2f * margin) / 700f);
+            float dw = 1200f * scale;
+            float dh = 700f * scale;
+            float left = (842f - dw) / 2f;
+            float top = (595f - dh) / 2f;
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            canvas.drawBitmap(bitmap, null, new RectF(left, top, left + dw, top + dh), paint);
+            pdf.finishPage(page);
+
+            File file = createOutputFile();
+            out = new FileOutputStream(file);
+            pdf.writeTo(out);
+            out.flush();
+            out.close();
+            out = null;
+            pdf.close();
+            pdf = null;
+            validatePdf(file);
+            sharePdf(file, chooserTitle);
         } catch (Throwable t) {
+            if (out != null) try { out.close(); } catch (Throwable ignored) {}
+            if (pdf != null) try { pdf.close(); } catch (Throwable ignored) {}
             failAsync(t);
+        } finally {
+            if (bitmap != null) try { bitmap.recycle(); } catch (Throwable ignored) {}
         }
+    }
+
+    private void validateBitmap(Bitmap bitmap) {
+        if (bitmap == null || bitmap.getWidth() < 100 || bitmap.getHeight() < 100) {
+            throw new IllegalStateException("Drawing bitmap is invalid");
+        }
+        int nonWhite = 0;
+        for (int y = 0; y < bitmap.getHeight(); y += 4) {
+            for (int x = 0; x < bitmap.getWidth(); x += 4) {
+                int c = bitmap.getPixel(x, y);
+                int a = (c >>> 24) & 255;
+                int r = (c >>> 16) & 255;
+                int g = (c >>> 8) & 255;
+                int b = c & 255;
+                if (a > 20 && (r < 245 || g < 245 || b < 245)) {
+                    nonWhite++;
+                    if (nonWhite >= 120) return;
+                }
+            }
+        }
+        throw new IllegalStateException("Drawing renderer produced a blank image");
     }
 
     private File createOutputFile() throws Exception {
@@ -233,7 +253,7 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
 
     private void validatePdf(File file) throws Exception {
         if (file == null || !file.exists()) throw new IllegalStateException("PDF file was not created");
-        if (file.length() < 2048L) throw new IllegalStateException("Generated PDF is unexpectedly empty (" + file.length() + " bytes)");
+        if (file.length() < 4096L) throw new IllegalStateException("Generated PDF is unexpectedly empty (" + file.length() + " bytes)");
         FileInputStream in = null;
         try {
             in = new FileInputStream(file);
@@ -287,12 +307,6 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
 
     private String successText() { return "GateCraft PDF ready"; }
 
-    private void closePrintPfd() {
-        ParcelFileDescriptor p = printPfd;
-        printPfd = null;
-        if (p != null) try { p.close(); } catch (Throwable ignored) {}
-    }
-
     private void failAsync(final Throwable t) {
         mainHandler.post(new Runnable() {
             @Override public void run() {
@@ -312,11 +326,12 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
     }
 
     private void destroyRenderer() {
-        closePrintPfd();
-        printAdapter = null;
         WebView w = renderWebView;
         renderWebView = null;
+        ViewGroup parent = renderParent;
+        renderParent = null;
         if (w != null) {
+            if (parent != null) try { parent.removeView(w); } catch (Throwable ignored) {}
             try { w.stopLoading(); } catch (Throwable ignored) {}
             try { w.loadUrl("about:blank"); } catch (Throwable ignored) {}
             try { w.clearHistory(); } catch (Throwable ignored) {}
