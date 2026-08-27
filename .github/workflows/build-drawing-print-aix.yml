@@ -1,0 +1,51 @@
+name: Build GateCraftDrawing Print PDF Canary
+
+on:
+  push:
+    branches: [ drawing-print-pdf-canary ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GateCraftCore
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant
+
+      - name: Get MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+
+      - name: Install isolated drawing source
+        run: |
+          rm -rf buildenv/src/*
+          cp -R drawing_extension/src/* buildenv/src/
+          find buildenv/src -type f -print
+
+      - name: Build GateCraftDrawing AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+
+      - name: Show generated artifacts
+        run: find buildenv/out -maxdepth 2 -type f -print
+
+      - name: Upload GateCraftDrawing AIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftDrawing-v2.3-aix
+          path: buildenv/out/*.aix
+          if-no-files-found: error
