@@ -28,7 +28,7 @@ import com.google.appinventor.components.runtime.OnDestroyListener;
 import com.google.appinventor.components.runtime.OnPauseListener;
 import com.google.appinventor.components.runtime.OnResumeListener;
 
-@DesignerComponent(version = 3, description = "GRIND & WELD: RUST & STEEL v2.2 offline lazy isometric Three.js ARPG with campaign world, sub-levels, NPC side quest, waypoints, fog-of-war, elite packs and procedural salvage vault.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
+@DesignerComponent(version = 4, description = "GRIND & WELD: RUST & STEEL v2.3 offline lazy isometric Three.js ARPG with deep multi-floor dungeon, NPC services, elite affixes, item affixes, shrines and bounty progression.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
 @SimpleObject(external = true)
 public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {
   private final Activity activity;
@@ -85,7 +85,7 @@ public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements On
   @SimpleFunction public boolean IsUnlocked() { return unlocked(); }
   @SimpleFunction public void StartGame() { if (!unlocked()) return; main.post(new Runnable(){@Override public void run(){openGame();}}); }
   @SimpleFunction public void StopGame() { main.post(new Runnable(){@Override public void run(){closeGame(false);}}); }
-  @SimpleFunction public String Version() { return "2.2.0"; }
+  @SimpleFunction public String Version() { return "2.3.0"; }
 
   private void enterLandscape() {
     try {
@@ -94,13 +94,13 @@ public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements On
         orientationChanged = true;
         activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
       }
-    } catch (Throwable ignored) { orientationChanged = false; }
+    } catch(Throwable ignored) { orientationChanged = false; }
   }
 
   private void restoreOrientation() {
     if (!orientationChanged) return;
     orientationChanged = false;
-    try { activity.setRequestedOrientation(previousOrientation); } catch (Throwable ignored) {}
+    try { activity.setRequestedOrientation(previousOrientation); } catch(Throwable ignored) {}
   }
 
   private void openGame() {
@@ -125,27 +125,17 @@ public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements On
       dialog.setContentView(wv);
       dialog.setOnDismissListener(new DialogInterface.OnDismissListener(){@Override public void onDismiss(DialogInterface d){destroyWebView();restoreOrientation();}});
       Window win=dialog.getWindow();
-      if(win!=null){
-        win.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);
-      }
+      if(win!=null){win.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);}
       dialog.show();
       win=dialog.getWindow();
-      if(win!=null){
-        win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);
-        View decor=win.getDecorView();
-        if(decor!=null)decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LOW_PROFILE);
-      }
+      if(win!=null){win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);View decor=win.getDecorView();if(decor!=null)decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LOW_PROFILE);}
       wv.loadDataWithBaseURL("https://gatecraft.local/",Payload.html(),"text/html","UTF-8",null);
     } catch(Throwable t){closeGame(false);GameError(String.valueOf(t.getMessage()));}
   }
   private void closeGame(boolean dispatchExit) {
     try { if(web!=null) web.evaluateJavascript("window.GW&&GW.shutdown&&GW.shutdown();",null); } catch(Throwable ignored){}
     try { if(dialog!=null&&dialog.isShowing())dialog.dismiss(); } catch(Throwable ignored){}
-    destroyWebView();
-    dialog=null;
-    restoreOrientation();
-    if(dispatchExit)ExitRequested();
+    destroyWebView(); dialog=null; restoreOrientation(); if(dispatchExit)ExitRequested();
   }
   private void destroyWebView() {
     final WebView wv=web; web=null; if(wv==null)return;
