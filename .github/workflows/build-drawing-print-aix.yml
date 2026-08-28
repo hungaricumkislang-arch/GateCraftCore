@@ -37,6 +37,89 @@ jobs:
           cp -R drawing_extension/src/* buildenv/src/
           find buildenv/src -type f -print
 
+      - name: Patch v2.5 full-canvas PNG extraction
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          matches = list(Path('buildenv/src').rglob('GateCraftDrawing.java'))
+          if len(matches) != 1:
+              raise SystemExit('Expected exactly one GateCraftDrawing.java, found %d' % len(matches))
+          p = matches[0]
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('import android.graphics.Bitmap;\n', 'import android.graphics.Bitmap;\nimport android.graphics.BitmapFactory;\n', 1)
+          s = s.replace('import android.os.SystemClock;\n', 'import android.os.SystemClock;\nimport android.util.Base64;\n', 1)
+          s = s.replace('version = 4,', 'version = 5,', 1)
+          s = s.replace('versionName = "2.4.0",', 'versionName = "2.5.0",', 1)
+          s = s.replace('public String Version() { return "2.4.0"; }', 'public String Version() { return "2.5.0"; }', 1)
+          old = '                            waitForChromiumVisualCommit(web, chooserTitle);'
+          new = '                            extractCanvasPng(web, chooserTitle, 0, null);'
+          if old not in s:
+              raise SystemExit('READY action pattern missing')
+          s = s.replace(old, new, 1)
+          marker = '    private void waitForChromiumVisualCommit(final WebView web, final String chooserTitle) {'
+          if marker not in s:
+              raise SystemExit('visual commit marker missing')
+          method = r'''
+    private void extractCanvasPng(final WebView web, final String chooserTitle, final int attempt,
+                                  final BitmapStats previousStats) {
+        if (web != renderWebView) {
+            failAsync(new IllegalStateException("PDF renderer replaced"));
+            return;
+        }
+        if (attempt > 4) {
+            failAsync(new IllegalStateException("Drawing canvas PNG did not stabilize"));
+            return;
+        }
+        try {
+            web.evaluateJavascript(
+                "(function(){try{var b=document.body;if(!b)return 'ERR:body missing';var e=b.getAttribute('data-gc-pdf-error');if(e)return 'ERR:'+e;var c=document.getElementById('gcPdfCanvas');if(!c||c.width!==1200||c.height!==700)return 'ERR:canvas missing';return c.toDataURL('image/png');}catch(e){return 'ERR:'+String(e);}})()",
+                new ValueCallback<String>() {
+                    @Override public void onReceiveValue(String value) {
+                        Bitmap bitmap = null;
+                        try {
+                            String data = cleanJsValue(value);
+                            if (data.startsWith("ERR:")) {
+                                throw new IllegalStateException("Drawing canvas export error: " + data.substring(4));
+                            }
+                            String prefix = "data:image/png;base64,";
+                            if (!data.startsWith(prefix)) {
+                                throw new IllegalStateException("Drawing canvas PNG data is invalid");
+                            }
+                            byte[] bytes = Base64.decode(data.substring(prefix.length()), Base64.DEFAULT);
+                            bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                            if (bitmap == null) throw new IllegalStateException("Drawing canvas PNG decode failed");
+                            if (bitmap.getWidth() != RENDER_W || bitmap.getHeight() != RENDER_H) {
+                                throw new IllegalStateException("Drawing canvas PNG size mismatch: " + bitmap.getWidth() + "x" + bitmap.getHeight());
+                            }
+                            BitmapStats stats = analyzeBitmap(bitmap);
+                            validateBitmapStats(stats);
+                            if (previousStats != null && framesStable(previousStats, stats)) {
+                                writeBitmapPdfAndShare(bitmap, chooserTitle);
+                                return;
+                            }
+                            final BitmapStats keepStats = stats;
+                            recycle(bitmap);
+                            bitmap = null;
+                            mainHandler.postDelayed(new Runnable() {
+                                @Override public void run() { extractCanvasPng(web, chooserTitle, attempt + 1, keepStats); }
+                            }, 250L);
+                        } catch (Throwable t) {
+                            recycle(bitmap);
+                            failAsync(t);
+                        }
+                    }
+                });
+        } catch (Throwable t) {
+            failAsync(t);
+        }
+    }
+
+'''
+          s = s.replace(marker, method + marker, 1)
+          p.write_text(s, encoding='utf-8')
+          print('patched', p)
+          PY
+
       - name: Build GateCraftDrawing AIX
         run: |
           cd buildenv
@@ -48,6 +131,6 @@ jobs:
       - name: Upload GateCraftDrawing AIX
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftDrawing-v2.4-aix
+          name: GateCraftDrawing-v2.5-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
