@@ -24,8 +24,8 @@ import com.google.appinventor.components.runtime.OnPauseListener;
 import com.google.appinventor.components.runtime.OnResumeListener;
 
 @DesignerComponent(
-    version = 4,
-    description = "GateCraft Arcade Suite v4: isolated lazy-loaded Workshop Run, Heroes of Craft & Gates and Metal Fighter.",
+    version = 5,
+    description = "GateCraft Arcade Suite v4.1: isolated lazy-loaded 90s-style Workshop Run, Heroes of Craft & Gates and Metal Fighter with upgraded animation, controls and FX.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     iconName = "")
@@ -160,7 +160,7 @@ public class GateCraftGame extends AndroidNonvisibleComponent
   @SimpleFunction(description="Returns active game score.") public int Score(){return metrics==null?0:metrics.score();}
   @SimpleFunction(description="Returns active game level.") public int Level(){return metrics==null?1:metrics.level();}
   @SimpleFunction(description="Returns active game lives.") public int Lives(){return metrics==null?3:metrics.lives();}
-  @SimpleFunction(description="Returns extension version.") public String Version(){return "4.0.0";}
+  @SimpleFunction(description="Returns extension version.") public String Version(){return "4.1.0";}
 
   @SimpleEvent(description="Raised whenever visible game score changes.") public void ScoreChanged(int score){EventDispatcher.dispatchEvent(this,"ScoreChanged",score);}
   @SimpleEvent(description="Raised after a Workshop Run level is completed.") public void LevelCompleted(int level,int score){EventDispatcher.dispatchEvent(this,"LevelCompleted",level,score);}
