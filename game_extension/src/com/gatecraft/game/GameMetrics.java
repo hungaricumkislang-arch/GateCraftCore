@@ -1,6 +1,6 @@
 package com.gatecraft.game;
 
-interface GameMetrics {
+public interface GameMetrics {
   int score();
   int level();
   int lives();
