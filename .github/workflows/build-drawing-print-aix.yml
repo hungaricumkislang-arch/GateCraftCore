@@ -38,8 +38,11 @@ jobs:
           find buildenv/src -type f -print
 
       - name: Patch v2.5 full-canvas PNG extraction
+        env:
+          GC_METHOD_B64: CiAgICBwcml2YXRlIHZvaWQgZXh0cmFjdENhbnZhc1BuZyhmaW5hbCBXZWJWaWV3IHdlYiwgZmluYWwgU3RyaW5nIGNob29zZXJUaXRsZSwgZmluYWwgaW50IGF0dGVtcHQsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBmaW5hbCBCaXRtYXBTdGF0cyBwcmV2aW91c1N0YXRzKSB7CiAgICAgICAgaWYgKHdlYiAhPSByZW5kZXJXZWJWaWV3KSB7CiAgICAgICAgICAgIGZhaWxBc3luYyhuZXcgSWxsZWdhbFN0YXRlRXhjZXB0aW9uKCJQREYgcmVuZGVyZXIgcmVwbGFjZWQiKSk7CiAgICAgICAgICAgIHJldHVybjsKICAgICAgICB9CiAgICAgICAgaWYgKGF0dGVtcHQgPiA0KSB7CiAgICAgICAgICAgIGZhaWxBc3luYyhuZXcgSWxsZWdhbFN0YXRlRXhjZXB0aW9uKCJEcmF3aW5nIGNhbnZhcyBQTkcgZGlkIG5vdCBzdGFiaWxpemUiKSk7CiAgICAgICAgICAgIHJldHVybjsKICAgICAgICB9CiAgICAgICAgdHJ5IHsKICAgICAgICAgICAgd2ViLmV2YWx1YXRlSmF2YXNjcmlwdCgKICAgICAgICAgICAgICAgICIoZnVuY3Rpb24oKXt0cnl7dmFyIGI9ZG9jdW1lbnQuYm9keTtpZighYilyZXR1cm4gJ0VSUjpib2R5IG1pc3NpbmcnO3ZhciBlPWIuZ2V0QXR0cmlidXRlKCdkYXRhLWdjLXBkZi1lcnJvcicpO2lmKGUpcmV0dXJuICdFUlI6JytlO3ZhciBjPWRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdnY1BkZkNhbnZhcycpO2lmKCFjfHxjLndpZHRoIT09MTIwMHx8Yy5oZWlnaHQhPT03MDApcmV0dXJuICdFUlI6Y2FudmFzIG1pc3NpbmcnO3JldHVybiBjLnRvRGF0YVVSTCgnaW1hZ2UvcG5nJyk7fWNhdGNoKGUpe3JldHVybiAnRVJSOicrU3RyaW5nKGUpO319KSgpIiwKICAgICAgICAgICAgICAgIG5ldyBWYWx1ZUNhbGxiYWNrPFN0cmluZz4oKSB7CiAgICAgICAgICAgICAgICAgICAgQE92ZXJyaWRlIHB1YmxpYyB2b2lkIG9uUmVjZWl2ZVZhbHVlKFN0cmluZyB2YWx1ZSkgewogICAgICAgICAgICAgICAgICAgICAgICBCaXRtYXAgYml0bWFwID0gbnVsbDsKICAgICAgICAgICAgICAgICAgICAgICAgdHJ5IHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0cmluZyBkYXRhID0gY2xlYW5Kc1ZhbHVlKHZhbHVlKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlmIChkYXRhLnN0YXJ0c1dpdGgoIkVSUjoiKSkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHRocm93IG5ldyBJbGxlZ2FsU3RhdGVFeGNlcHRpb24oIkRyYXdpbmcgY2FudmFzIGV4cG9ydCBlcnJvcjogIiArIGRhdGEuc3Vic3RyaW5nKDQpKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0cmluZyBwcmVmaXggPSAiZGF0YTppbWFnZS9wbmc7YmFzZTY0LCI7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAoIWRhdGEuc3RhcnRzV2l0aChwcmVmaXgpKSB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgdGhyb3cgbmV3IElsbGVnYWxTdGF0ZUV4Y2VwdGlvbigiRHJhd2luZyBjYW52YXMgUE5HIGRhdGEgaXMgaW52YWxpZCIpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgICAgICAgYnl0ZVtdIGJ5dGVzID0gQmFzZTY0LmRlY29kZShkYXRhLnN1YnN0cmluZyhwcmVmaXgubGVuZ3RoKCkpLCBCYXNlNjQuREVGQVVMVCk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBiaXRtYXAgPSBCaXRtYXBGYWN0b3J5LmRlY29kZUJ5dGVBcnJheShieXRlcywgMCwgYnl0ZXMubGVuZ3RoKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlmIChiaXRtYXAgPT0gbnVsbCkgdGhyb3cgbmV3IElsbGVnYWxTdGF0ZUV4Y2VwdGlvbigiRHJhd2luZyBjYW52YXMgUE5HIGRlY29kZSBmYWlsZWQiKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlmIChiaXRtYXAuZ2V0V2lkdGgoKSAhPSBSRU5ERVJfVyB8fCBiaXRtYXAuZ2V0SGVpZ2h0KCkgIT0gUkVOREVSX0gpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB0aHJvdyBuZXcgSWxsZWdhbFN0YXRlRXhjZXB0aW9uKCJEcmF3aW5nIGNhbnZhcyBQTkcgc2l6ZSBtaXNtYXRjaDogIiArIGJpdG1hcC5nZXRXaWR0aCgpICsgIngiICsgYml0bWFwLmdldEhlaWdodCgpKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJpdG1hcFN0YXRzIHN0YXRzID0gYW5hbHl6ZUJpdG1hcChiaXRtYXApOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgdmFsaWRhdGVCaXRtYXBTdGF0cyhzdGF0cyk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAocHJldmlvdXNTdGF0cyAhPSBudWxsICYmIGZyYW1lc1N0YWJsZShwcmV2aW91c1N0YXRzLCBzdGF0cykpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB3cml0ZUJpdG1hcFBkZkFuZFNoYXJlKGJpdG1hcCwgY2hvb3NlclRpdGxlKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICByZXR1cm47CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBmaW5hbCBCaXRtYXBTdGF0cyBrZWVwU3RhdHMgPSBzdGF0czsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHJlY3ljbGUoYml0bWFwKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGJpdG1hcCA9IG51bGw7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBtYWluSGFuZGxlci5wb3N0RGVsYXllZChuZXcgUnVubmFibGUoKSB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQE92ZXJyaWRlIHB1YmxpYyB2b2lkIHJ1bigpIHsgZXh0cmFjdENhbnZhc1BuZyh3ZWIsIGNob29zZXJUaXRsZSwgYXR0ZW1wdCArIDEsIGtlZXBTdGF0cyk7IH0KICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0sIDI1MEwpOwogICAgICAgICAgICAgICAgICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgdCkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgcmVjeWNsZShiaXRtYXApOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgZmFpbEFzeW5jKHQpOwogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgfSk7CiAgICAgICAgfSBjYXRjaCAoVGhyb3dhYmxlIHQpIHsKICAgICAgICAgICAgZmFpbEFzeW5jKHQpOwogICAgICAgIH0KICAgIH0KCg==
         run: |
           python3 - <<'PY'
+          import base64, os
           from pathlib import Path
           matches = list(Path('buildenv/src').rglob('GateCraftDrawing.java'))
           if len(matches) != 1:
@@ -52,69 +55,13 @@ jobs:
           s = s.replace('versionName = "2.4.0",', 'versionName = "2.5.0",', 1)
           s = s.replace('public String Version() { return "2.4.0"; }', 'public String Version() { return "2.5.0"; }', 1)
           old = '                            waitForChromiumVisualCommit(web, chooserTitle);'
-          new = '                            extractCanvasPng(web, chooserTitle, 0, null);'
           if old not in s:
               raise SystemExit('READY action pattern missing')
-          s = s.replace(old, new, 1)
+          s = s.replace(old, '                            extractCanvasPng(web, chooserTitle, 0, null);', 1)
           marker = '    private void waitForChromiumVisualCommit(final WebView web, final String chooserTitle) {'
           if marker not in s:
               raise SystemExit('visual commit marker missing')
-          method = r'''
-    private void extractCanvasPng(final WebView web, final String chooserTitle, final int attempt,
-                                  final BitmapStats previousStats) {
-        if (web != renderWebView) {
-            failAsync(new IllegalStateException("PDF renderer replaced"));
-            return;
-        }
-        if (attempt > 4) {
-            failAsync(new IllegalStateException("Drawing canvas PNG did not stabilize"));
-            return;
-        }
-        try {
-            web.evaluateJavascript(
-                "(function(){try{var b=document.body;if(!b)return 'ERR:body missing';var e=b.getAttribute('data-gc-pdf-error');if(e)return 'ERR:'+e;var c=document.getElementById('gcPdfCanvas');if(!c||c.width!==1200||c.height!==700)return 'ERR:canvas missing';return c.toDataURL('image/png');}catch(e){return 'ERR:'+String(e);}})()",
-                new ValueCallback<String>() {
-                    @Override public void onReceiveValue(String value) {
-                        Bitmap bitmap = null;
-                        try {
-                            String data = cleanJsValue(value);
-                            if (data.startsWith("ERR:")) {
-                                throw new IllegalStateException("Drawing canvas export error: " + data.substring(4));
-                            }
-                            String prefix = "data:image/png;base64,";
-                            if (!data.startsWith(prefix)) {
-                                throw new IllegalStateException("Drawing canvas PNG data is invalid");
-                            }
-                            byte[] bytes = Base64.decode(data.substring(prefix.length()), Base64.DEFAULT);
-                            bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                            if (bitmap == null) throw new IllegalStateException("Drawing canvas PNG decode failed");
-                            if (bitmap.getWidth() != RENDER_W || bitmap.getHeight() != RENDER_H) {
-                                throw new IllegalStateException("Drawing canvas PNG size mismatch: " + bitmap.getWidth() + "x" + bitmap.getHeight());
-                            }
-                            BitmapStats stats = analyzeBitmap(bitmap);
-                            validateBitmapStats(stats);
-                            if (previousStats != null && framesStable(previousStats, stats)) {
-                                writeBitmapPdfAndShare(bitmap, chooserTitle);
-                                return;
-                            }
-                            final BitmapStats keepStats = stats;
-                            recycle(bitmap);
-                            bitmap = null;
-                            mainHandler.postDelayed(new Runnable() {
-                                @Override public void run() { extractCanvasPng(web, chooserTitle, attempt + 1, keepStats); }
-                            }, 250L);
-                        } catch (Throwable t) {
-                            recycle(bitmap);
-                            failAsync(t);
-                        }
-                    }
-                });
-        } catch (Throwable t) {
-            failAsync(t);
-        }
-    }
-
-'''
+          method = base64.b64decode(os.environ['GC_METHOD_B64']).decode('utf-8')
           s = s.replace(marker, method + marker, 1)
           p.write_text(s, encoding='utf-8')
           print('patched', p)
