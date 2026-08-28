@@ -39,7 +39,7 @@ import java.lang.reflect.Constructor;
     iconName = "")
 @SimpleObject(external = true)
 public class GateCraftGame extends AndroidNonvisibleComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {
-  private static final String RUNTIME_ASSET = "gatecraft_game_runtime.jar";
+  private static final String RUNTIME_ASSET = "gatecraft_game_runtime.gcr";
   private final Activity activity;
   private final Handler mainHandler = new Handler(Looper.getMainLooper());
   private Dialog dialog;
@@ -58,8 +58,6 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
     container.$form().registerForOnPause(this);
     container.$form().registerForOnResume(this);
     container.$form().registerForOnDestroy(this);
-    // Never scan the view tree during first-frame startup. The old auto-hook behavior
-    // is preserved, but it begins after the UI has had time to render.
     scheduleWorkshopButtonHook(2200L, 0);
   }
 
@@ -110,6 +108,7 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
     File codeDir = activity.getCodeCacheDir();
     if (codeDir == null) codeDir = activity.getCacheDir();
     File jar = new File(codeDir, "gc_arcade_v6_runtime.jar");
+    if (jar.exists()) jar.setWritable(true, true);
     InputStream in = activity.getAssets().open(RUNTIME_ASSET);
     FileOutputStream out = new FileOutputStream(jar, false);
     byte[] buf = new byte[16384];
@@ -118,6 +117,7 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
     in.close();
     out.flush();
     out.close();
+    jar.setReadOnly();
     runtimeLoader = new DexClassLoader(jar.getAbsolutePath(), codeDir.getAbsolutePath(), null, activity.getClassLoader());
   }
 
@@ -261,7 +261,7 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
   @SimpleFunction(description="Returns active game score.") public int Score() { return metrics == null ? 0 : metrics.score(); }
   @SimpleFunction(description="Returns active game level.") public int Level() { return metrics == null ? 1 : metrics.level(); }
   @SimpleFunction(description="Returns active game lives.") public int Lives() { return metrics == null ? 3 : metrics.lives(); }
-  @SimpleFunction(description="Returns extension version.") public String Version() { return "6.0.2"; }
+  @SimpleFunction(description="Returns extension version.") public String Version() { return "6.0.3"; }
 
   @SimpleEvent(description="Raised whenever visible game score changes.") public void ScoreChanged(int score) { EventDispatcher.dispatchEvent(this, "ScoreChanged", score); }
   @SimpleEvent(description="Raised after a Workshop Run level is completed.") public void LevelCompleted(int level, int score) { EventDispatcher.dispatchEvent(this, "LevelCompleted", level, score); }
