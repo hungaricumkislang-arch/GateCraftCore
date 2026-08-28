@@ -1,0 +1,75 @@
+name: Build GRIND WELD WebGL AIX Canary
+
+on:
+  push:
+    branches: [ grind-weld-webgl-canary ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GateCraftCore
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant
+
+      - name: Get MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+
+      - name: Build offline compressed Three.js payload
+        run: |
+          curl -L --fail --retry 3 https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.0/three.min.js -o /tmp/three.min.js
+          python3 - <<'PY'
+          import gzip, base64, pathlib, textwrap
+          root=pathlib.Path('grind_weld_extension')
+          html=(root/'game/grind_weld_web.html').read_text(encoding='utf-8')
+          three=pathlib.Path('/tmp/three.min.js').read_text(encoding='utf-8')
+          assert '/*__THREEJS__*/' in html
+          final=html.replace('/*__THREEJS__*/', three)
+          raw=gzip.compress(final.encode('utf-8'), compresslevel=9)
+          b64=base64.b64encode(raw).decode('ascii')
+          chunks=textwrap.wrap(b64,12000)
+          out=root/'src/com/gatecraft/grindweld/Payload.java'
+          out.parent.mkdir(parents=True,exist_ok=True)
+          with out.open('w',encoding='utf-8') as f:
+              f.write('package com.gatecraft.grindweld;\n')
+              f.write('import android.util.Base64;\nimport java.io.ByteArrayInputStream;\nimport java.io.ByteArrayOutputStream;\nimport java.util.zip.GZIPInputStream;\n')
+              f.write('final class Payload { private Payload(){} private static final String[] P={\n')
+              for c in chunks: f.write('"'+c+'",\n')
+              f.write('}; static String html(){ try { StringBuilder s=new StringBuilder(); for(String p:P)s.append(p); byte[] z=Base64.decode(s.toString(),Base64.DEFAULT); GZIPInputStream g=new GZIPInputStream(new ByteArrayInputStream(z)); ByteArrayOutputStream o=new ByteArrayOutputStream(900000); byte[] b=new byte[8192]; int n; while((n=g.read(b))>0)o.write(b,0,n); g.close(); return new String(o.toByteArray(),"UTF-8"); }catch(Exception e){ return "<html><body style=\\"background:#111;color:white\\">GRIND & WELD payload error</body></html>"; }} }\n')
+          print('three bytes',len(three.encode()),'html bytes',len(final.encode()),'gzip bytes',len(raw),'chunks',len(chunks))
+          PY
+
+      - name: Install isolated Grind Weld source
+        run: |
+          rm -rf buildenv/src/*
+          cp -R grind_weld_extension/src/* buildenv/src/
+          find buildenv/src -type f -print
+
+      - name: Build GateCraftGrindWeld AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+
+      - name: Show generated artifacts
+        run: find buildenv/out -maxdepth 2 -type f -print
+
+      - name: Upload Grind Weld AIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftGrindWeld-v1.0-offline-aix
+          path: buildenv/out/*.aix
+          if-no-files-found: error
