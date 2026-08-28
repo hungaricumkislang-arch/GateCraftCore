@@ -41,9 +41,10 @@ jobs:
           hotfix=(root/'game/campaign_hotfix.js').read_text(encoding='utf-8')
           world2=(root/'game/world_v22.js').read_text(encoding='utf-8')
           world3=(root/'game/world_v23.js').read_text(encoding='utf-8')
+          world4=(root/'game/world_v24.js').read_text(encoding='utf-8')
           marker='function joyPoint(e){'
           assert marker in game
-          game=game.replace(marker, patch+'\n'+hotfix+'\n'+world2+'\n'+world3+'\n'+marker, 1)
+          game=game.replace(marker, patch+'\n'+hotfix+'\n'+world2+'\n'+world3+'\n'+world4+'\n'+marker, 1)
           three=pathlib.Path('/tmp/three.min.js').read_text(encoding='utf-8')
           assert '/*__THREEJS__*/' in html
           assert '/*__GAMEJS__*/' in html
@@ -58,8 +59,8 @@ jobs:
               f.write('import android.util.Base64;\nimport java.io.ByteArrayInputStream;\nimport java.io.ByteArrayOutputStream;\nimport java.util.zip.GZIPInputStream;\n')
               f.write('final class Payload { private Payload(){} private static final String[] P={\n')
               for c in chunks: f.write('"'+c+'",\n')
-              f.write('}; static String html(){ try { StringBuilder s=new StringBuilder(); for(String p:P)s.append(p); byte[] z=Base64.decode(s.toString(),Base64.DEFAULT); GZIPInputStream g=new GZIPInputStream(new ByteArrayInputStream(z)); ByteArrayOutputStream o=new ByteArrayOutputStream(2100000); byte[] b=new byte[8192]; int n; while((n=g.read(b))>0)o.write(b,0,n); g.close(); return new String(o.toByteArray(),"UTF-8"); }catch(Exception e){ return "<html><body style=\\"background:#111;color:white\\">GRIND & WELD payload error</body></html>"; }} }\n')
-          print('three',len(three.encode()),'game',len(game.encode()),'world2',len(world2.encode()),'world3',len(world3.encode()),'html',len(final.encode()),'gzip',len(raw),'chunks',len(chunks))
+              f.write('}; static String html(){ try { StringBuilder s=new StringBuilder(); for(String p:P)s.append(p); byte[] z=Base64.decode(s.toString(),Base64.DEFAULT); GZIPInputStream g=new GZIPInputStream(new ByteArrayInputStream(z)); ByteArrayOutputStream o=new ByteArrayOutputStream(2200000); byte[] b=new byte[8192]; int n; while((n=g.read(b))>0)o.write(b,0,n); g.close(); return new String(o.toByteArray(),"UTF-8"); }catch(Exception e){ return "<html><body style=\\"background:#111;color:white\\">GRIND & WELD payload error</body></html>"; }} }\n')
+          print('three',len(three.encode()),'game',len(game.encode()),'world2',len(world2.encode()),'world3',len(world3.encode()),'world4',len(world4.encode()),'html',len(final.encode()),'gzip',len(raw),'chunks',len(chunks))
           PY
 
       - name: Install isolated Grind Weld source
@@ -79,6 +80,6 @@ jobs:
       - name: Upload Grind Weld AIX
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGrindWeld-v2.3-deep-world-aix
+          name: GateCraftGrindWeld-v2.4-rust-rift-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
