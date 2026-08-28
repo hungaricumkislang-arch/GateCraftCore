@@ -28,7 +28,7 @@ import com.google.appinventor.components.runtime.OnDestroyListener;
 import com.google.appinventor.components.runtime.OnPauseListener;
 import com.google.appinventor.components.runtime.OnResumeListener;
 
-@DesignerComponent(version = 5, description = "GRIND & WELD: RUST & STEEL v2.4 offline lazy isometric Three.js ARPG with campaign world, multi-floor dungeons, dual equipment, contracts, named Nemesis hunts and repeatable Rust Rift endgame.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
+@DesignerComponent(version = 6, description = "GRIND & WELD: RUST & STEEL v2.6 offline lazy isometric Three.js ARPG with Diablo-style front menu, animated gate loading, multi-act campaign, multi-floor dungeons, contracts, Nemesis hunts, Rune Words, richer itemization and Rust Rift endgame.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
 @SimpleObject(external = true)
 public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {
   private final Activity activity;
@@ -85,7 +85,7 @@ public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements On
   @SimpleFunction public boolean IsUnlocked() { return unlocked(); }
   @SimpleFunction public void StartGame() { if (!unlocked()) return; main.post(new Runnable(){@Override public void run(){openGame();}}); }
   @SimpleFunction public void StopGame() { main.post(new Runnable(){@Override public void run(){closeGame(false);}}); }
-  @SimpleFunction public String Version() { return "2.4.0"; }
+  @SimpleFunction public String Version() { return "2.6.0"; }
 
   private void enterLandscape() {
     try {
