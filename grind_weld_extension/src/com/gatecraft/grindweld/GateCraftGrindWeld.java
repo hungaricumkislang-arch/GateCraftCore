@@ -2,7 +2,7 @@ package com.gatecraft.grindweld;
 
 import android.app.Activity;
 import android.app.Dialog;
-import android.app.DialogInterface;
+import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.os.Handler;
 import android.os.Looper;
