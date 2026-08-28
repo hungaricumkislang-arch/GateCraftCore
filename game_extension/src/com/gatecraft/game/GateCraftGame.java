@@ -12,6 +12,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
+import dalvik.system.DexClassLoader;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.SimpleEvent;
@@ -25,19 +26,26 @@ import com.google.appinventor.components.runtime.OnDestroyListener;
 import com.google.appinventor.components.runtime.OnPauseListener;
 import com.google.appinventor.components.runtime.OnResumeListener;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.lang.reflect.Constructor;
+
 @DesignerComponent(
     version = 8,
-    description = "GateCraft Arcade Suite v6.0 Classic Heritage: Workshop Run run-and-gun sectors and bosses, Heroes weekly strategy/mines/recruitment/rival AI, and Metal Fighter arcade ladder/parry/throw/super. Full-screen landscape, multi-touch, 12-language UI and lazy memory release preserved.",
+    description = "GateCraft Arcade Suite v6.0 Classic Heritage, startup-safe dynamic runtime edition. The full three-game runtime is loaded only when the player opens the arcade launcher.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     iconName = "")
 @SimpleObject(external = true)
 public class GateCraftGame extends AndroidNonvisibleComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {
+  private static final String RUNTIME_ASSET = "gatecraft_game_runtime.jar";
   private final Activity activity;
   private final Handler mainHandler = new Handler(Looper.getMainLooper());
   private Dialog dialog;
   private View activeView;
   private GameMetrics metrics;
+  private DexClassLoader runtimeLoader;
   private boolean started, buttonHooked;
   private int calculationCount, language = 2;
   private boolean testMode = true;
@@ -50,16 +58,17 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
     container.$form().registerForOnPause(this);
     container.$form().registerForOnResume(this);
     container.$form().registerForOnDestroy(this);
-    scheduleWorkshopButtonHook(0);
+    // Never scan the view tree during first-frame startup. The old auto-hook behavior
+    // is preserved, but it begins after the UI has had time to render.
+    scheduleWorkshopButtonHook(2200L, 0);
   }
 
-  private void scheduleWorkshopButtonHook(final int attempt) {
-    long delay = attempt == 0 ? 1200L : 500L;
+  private void scheduleWorkshopButtonHook(final long delay, final int attempt) {
     mainHandler.postDelayed(new Runnable() {
       @Override public void run() {
         if (buttonHooked) return;
         if (hookWorkshopButton()) return;
-        if (attempt < 24) scheduleWorkshopButtonHook(attempt + 1);
+        if (attempt < 20) scheduleWorkshopButtonHook(700L, attempt + 1);
       }
     }, delay);
   }
@@ -96,6 +105,32 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
     return null;
   }
 
+  private synchronized void ensureRuntime() throws Exception {
+    if (runtimeLoader != null) return;
+    File codeDir = activity.getCodeCacheDir();
+    if (codeDir == null) codeDir = activity.getCacheDir();
+    File jar = new File(codeDir, "gc_arcade_v6_runtime.jar");
+    InputStream in = activity.getAssets().open(RUNTIME_ASSET);
+    FileOutputStream out = new FileOutputStream(jar, false);
+    byte[] buf = new byte[16384];
+    int n;
+    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+    in.close();
+    out.flush();
+    out.close();
+    runtimeLoader = new DexClassLoader(jar.getAbsolutePath(), codeDir.getAbsolutePath(), null, activity.getClassLoader());
+  }
+
+  private View newRuntimeView(String className) throws Exception {
+    ensureRuntime();
+    Class<?> c = Class.forName(className, true, runtimeLoader);
+    Constructor<?> k = c.getDeclaredConstructor(Context.class, GateCraftGame.class);
+    k.setAccessible(true);
+    Object v = k.newInstance(activity, this);
+    if (!(v instanceof View)) throw new IllegalStateException("Runtime class is not a View: " + className);
+    return (View) v;
+  }
+
   private void enterLandscape() {
     try {
       previousOrientation = activity.getRequestedOrientation();
@@ -112,32 +147,23 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
     try { activity.setRequestedOrientation(previousOrientation); } catch (Throwable ignored) {}
   }
 
-  private View createGameView(String className) {
-    try {
-      Class<?> cls = Class.forName(className, true, getClass().getClassLoader());
-      java.lang.reflect.Constructor<?> ctor = cls.getDeclaredConstructor(Context.class, GateCraftGame.class);
-      ctor.setAccessible(true);
-      Object v = ctor.newInstance(activity, this);
-      return v instanceof View ? (View) v : null;
-    } catch (Throwable ignored) {
-      return null;
-    }
-  }
-
   private void showGameOverlay() {
     try {
       closeGameOverlay(false);
+      ensureRuntime();
       enterLandscape();
       dialog = new Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
       dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
       dialog.setCancelable(true);
       dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
         @Override public void onDismiss(DialogInterface d) {
-          releaseActive(); dialog = null; started = false; restoreOrientation();
+          releaseActive();
+          dialog = null;
+          started = false;
+          restoreOrientation();
         }
       });
       showLauncherInsideDialog();
-      if (dialog == null || activeView == null) { closeGameOverlay(false); return; }
       Window w = dialog.getWindow();
       if (w != null) {
         w.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -151,47 +177,50 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
         View decor = w.getDecorView();
         if (decor != null) decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LOW_PROFILE);
       }
-    } catch (Throwable t) { closeGameOverlay(false); }
+    } catch (Throwable t) {
+      closeGameOverlay(false);
+    }
   }
 
-  private void setActive(View v, GameMetrics m) {
-    if (v == null) return;
+  private void setActive(View v) {
     releaseActive();
     activeView = v;
-    metrics = m;
-    if (metrics != null) { metrics.setLanguage(language); metrics.setPaused(false); }
+    metrics = (v instanceof GameMetrics) ? (GameMetrics) v : null;
+    if (metrics != null) {
+      metrics.setLanguage(language);
+      metrics.setPaused(false);
+    }
     if (dialog != null) dialog.setContentView(v);
   }
 
-  private void showLauncherInsideDialog() {
-    View v = createGameView("com.gatecraft.game.GameLauncherV6View");
-    if (v != null) setActive(v, null);
+  private void showLauncherInsideDialog() throws Exception {
+    setActive(newRuntimeView("com.gatecraft.game.GameLauncherV6View"));
   }
 
-  void launchMode(int mode) {
-    String className = null;
-    if (mode == 1) className = "com.gatecraft.game.WorkshopRunV6View";
-    else if (mode == 2) className = "com.gatecraft.game.HeroesCraftV6View";
-    else if (mode == 3) className = "com.gatecraft.game.MetalFighterV6View";
-    if (className == null) return;
-    View v = createGameView(className);
-    if (v == null) return;
-    GameMetrics gm = v instanceof GameMetrics ? (GameMetrics) v : null;
-    setActive(v, gm);
+  public void launchMode(int mode) {
+    try {
+      if (mode == 1) setActive(newRuntimeView("com.gatecraft.game.WorkshopRunV6View"));
+      else if (mode == 2) setActive(newRuntimeView("com.gatecraft.game.HeroesCraftV6View"));
+      else if (mode == 3) setActive(newRuntimeView("com.gatecraft.game.MetalFighterV6View"));
+    } catch (Throwable t) {
+      closeGameOverlay(false);
+    }
   }
 
-  void returnToLauncher() { showLauncherInsideDialog(); }
-  int getCalculationCount() { return calculationCount; }
-  boolean isTestMode() { return testMode; }
-  int getLanguage() { return language; }
-  boolean modeUnlocked(int mode) {
+  public void returnToLauncher() {
+    try { showLauncherInsideDialog(); } catch (Throwable t) { closeGameOverlay(false); }
+  }
+  public int getCalculationCount() { return calculationCount; }
+  public boolean isTestMode() { return testMode; }
+  public int getLanguage() { return language; }
+  public boolean modeUnlocked(int mode) {
     if (mode <= 1) return calculationCount >= 1;
     if (testMode) return calculationCount >= 1;
     if (mode == 2) return calculationCount >= 10;
     if (mode == 3) return calculationCount >= 20;
     return false;
   }
-  int requiredFor(int mode) {
+  public int requiredFor(int mode) {
     if (mode <= 1) return 1;
     if (mode == 2) return 10;
     if (mode == 3) return 20;
@@ -199,8 +228,11 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
   }
 
   private void releaseActive() {
-    if (metrics != null) { try { metrics.shutdown(); } catch (Throwable ignored) {} }
-    activeView = null; metrics = null;
+    if (metrics != null) {
+      try { metrics.shutdown(); } catch (Throwable ignored) {}
+    }
+    activeView = null;
+    metrics = null;
   }
 
   private void closeGameOverlay(boolean dispatchExit) {
@@ -212,11 +244,11 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
     if (dispatchExit) EventDispatcher.dispatchEvent(this, "ExitRequested");
   }
 
-  void requestExitFromView() { closeGameOverlay(true); }
-  void reportScore(int score) { EventDispatcher.dispatchEvent(this, "ScoreChanged", score); }
-  void reportLevelComplete(int level, int score) { EventDispatcher.dispatchEvent(this, "LevelCompleted", level, score); }
-  void reportGameComplete(int score) { EventDispatcher.dispatchEvent(this, "GameCompleted", score); }
-  void reportGameOver(int score) { EventDispatcher.dispatchEvent(this, "GameOver", score); }
+  public void requestExitFromView() { closeGameOverlay(true); }
+  public void reportScore(int score) { EventDispatcher.dispatchEvent(this, "ScoreChanged", score); }
+  public void reportLevelComplete(int level, int score) { EventDispatcher.dispatchEvent(this, "LevelCompleted", level, score); }
+  public void reportGameComplete(int score) { EventDispatcher.dispatchEvent(this, "GameCompleted", score); }
+  public void reportGameOver(int score) { EventDispatcher.dispatchEvent(this, "GameOver", score); }
 
   @SimpleFunction(description="Opens the GateCraft arcade launcher in full-screen landscape.") public void StartGame() { showGameOverlay(); }
   @SimpleFunction(description="Pauses the active arcade game.") public void PauseGame() { if (metrics != null) metrics.setPaused(true); }
@@ -229,7 +261,7 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
   @SimpleFunction(description="Returns active game score.") public int Score() { return metrics == null ? 0 : metrics.score(); }
   @SimpleFunction(description="Returns active game level.") public int Level() { return metrics == null ? 1 : metrics.level(); }
   @SimpleFunction(description="Returns active game lives.") public int Lives() { return metrics == null ? 3 : metrics.lives(); }
-  @SimpleFunction(description="Returns extension version.") public String Version() { return "6.0.0"; }
+  @SimpleFunction(description="Returns extension version.") public String Version() { return "6.0.2"; }
 
   @SimpleEvent(description="Raised whenever visible game score changes.") public void ScoreChanged(int score) { EventDispatcher.dispatchEvent(this, "ScoreChanged", score); }
   @SimpleEvent(description="Raised after a Workshop Run level is completed.") public void LevelCompleted(int level, int score) { EventDispatcher.dispatchEvent(this, "LevelCompleted", level, score); }
@@ -239,5 +271,9 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
 
   @Override public void onPause() { if (metrics != null) metrics.setPaused(true); }
   @Override public void onResume() { if (started && metrics != null) metrics.setPaused(false); }
-  @Override public void onDestroy() { closeGameOverlay(false); mainHandler.removeCallbacksAndMessages(null); }
+  @Override public void onDestroy() {
+    closeGameOverlay(false);
+    mainHandler.removeCallbacksAndMessages(null);
+    runtimeLoader = null;
+  }
 }
