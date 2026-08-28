@@ -1,8 +1,8 @@
-name: Build GateCraftGame Suite v4 Arcade Reboot AIX Canary
+name: Build GateCraftGame Suite v5 Arcade Depth AIX Canary
 
 on:
   push:
-    branches: [ game-suite-v4-arcade-reboot ]
+    branches: [ game-suite-v5-arcade-depth ]
   workflow_dispatch:
 
 permissions:
@@ -35,7 +35,7 @@ jobs:
           cp -R game_extension/src/* buildenv/src/
           find buildenv/src -type f -print
 
-      - name: Build GateCraftGame v4 AIX
+      - name: Build GateCraftGame v5 AIX
         run: |
           cd buildenv
           ant clean extensions
@@ -43,9 +43,9 @@ jobs:
       - name: Show generated artifacts
         run: find buildenv/out -maxdepth 2 -type f -print
 
-      - name: Upload GateCraftGame v4 AIX
+      - name: Upload GateCraftGame v5 AIX
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGame-v4.0-arcade-reboot-aix
+          name: GateCraftGame-v5.0-arcade-depth-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
