@@ -1,8 +1,8 @@
-name: Build GateCraftGame Suite v5 Arcade Depth AIX Canary
+name: Build GateCraftGame Suite v6 Classic Heritage AIX Canary
 
 on:
   push:
-    branches: [ game-suite-v5-arcade-depth ]
+    branches: [ game-suite-v6-classic-heritage ]
   workflow_dispatch:
 
 permissions:
@@ -33,18 +33,9 @@ jobs:
         run: |
           rm -rf buildenv/src/*
           cp -R game_extension/src/* buildenv/src/
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('buildenv/src/com/gatecraft/game/HeroesCraftV5View.java')
-          s=p.read_text(encoding='utf-8')
-          old='endTurn=new RectF(700,348,944,410)'
-          new='endTurn=new RectF(34,454,210,514)'
-          assert old in s
-          p.write_text(s.replace(old,new,1),encoding='utf-8')
-          PY
           find buildenv/src -type f -print
 
-      - name: Build GateCraftGame v5 AIX
+      - name: Build GateCraftGame v6 AIX
         run: |
           cd buildenv
           ant clean extensions
@@ -52,9 +43,9 @@ jobs:
       - name: Show generated artifacts
         run: find buildenv/out -maxdepth 2 -type f -print
 
-      - name: Upload GateCraftGame v5 AIX
+      - name: Upload GateCraftGame v6 AIX
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGame-v5.0-arcade-depth-aix
+          name: GateCraftGame-v6.0-classic-heritage-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
