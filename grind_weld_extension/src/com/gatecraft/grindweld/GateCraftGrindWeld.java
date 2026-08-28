@@ -2,7 +2,7 @@ package com.gatecraft.grindweld;
 
 import android.app.Activity;
 import android.app.Dialog;
-import android.content.DialogInterface;
+import android.app.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.os.Handler;
 import android.os.Looper;
@@ -28,7 +28,7 @@ import com.google.appinventor.components.runtime.OnDestroyListener;
 import com.google.appinventor.components.runtime.OnPauseListener;
 import com.google.appinventor.components.runtime.OnResumeListener;
 
-@DesignerComponent(version = 2, description = "GRIND & WELD: RUST & STEEL v2 offline lazy isometric Three.js ARPG with full-screen landscape lifecycle.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
+@DesignerComponent(version = 3, description = "GRIND & WELD: RUST & STEEL v2.2 offline lazy isometric Three.js ARPG with campaign world, sub-levels, NPC side quest, waypoints, fog-of-war, elite packs and procedural salvage vault.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
 @SimpleObject(external = true)
 public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {
   private final Activity activity;
@@ -85,7 +85,7 @@ public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements On
   @SimpleFunction public boolean IsUnlocked() { return unlocked(); }
   @SimpleFunction public void StartGame() { if (!unlocked()) return; main.post(new Runnable(){@Override public void run(){openGame();}}); }
   @SimpleFunction public void StopGame() { main.post(new Runnable(){@Override public void run(){closeGame(false);}}); }
-  @SimpleFunction public String Version() { return "2.0.0"; }
+  @SimpleFunction public String Version() { return "2.2.0"; }
 
   private void enterLandscape() {
     try {
