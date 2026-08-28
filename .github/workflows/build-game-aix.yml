@@ -33,6 +33,15 @@ jobs:
         run: |
           rm -rf buildenv/src/*
           cp -R game_extension/src/* buildenv/src/
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('buildenv/src/com/gatecraft/game/HeroesCraftV5View.java')
+          s=p.read_text(encoding='utf-8')
+          old='endTurn=new RectF(700,348,944,410)'
+          new='endTurn=new RectF(34,454,210,514)'
+          assert old in s
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
           find buildenv/src -type f -print
 
       - name: Build GateCraftGame v5 AIX
