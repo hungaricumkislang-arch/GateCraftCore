@@ -38,9 +38,10 @@ jobs:
           html=(root/'game/grind_weld_web.html').read_text(encoding='utf-8')
           game=(root/'game/grind_weld_v2.js').read_text(encoding='utf-8')
           patch=(root/'game/campaign_patch.js').read_text(encoding='utf-8')
+          hotfix=(root/'game/campaign_hotfix.js').read_text(encoding='utf-8')
           marker='function joyPoint(e){'
           assert marker in game
-          game=game.replace(marker, patch+'\n'+marker, 1)
+          game=game.replace(marker, patch+'\n'+hotfix+'\n'+marker, 1)
           three=pathlib.Path('/tmp/three.min.js').read_text(encoding='utf-8')
           assert '/*__THREEJS__*/' in html
           assert '/*__GAMEJS__*/' in html
@@ -56,7 +57,7 @@ jobs:
               f.write('final class Payload { private Payload(){} private static final String[] P={\n')
               for c in chunks: f.write('"'+c+'",\n')
               f.write('}; static String html(){ try { StringBuilder s=new StringBuilder(); for(String p:P)s.append(p); byte[] z=Base64.decode(s.toString(),Base64.DEFAULT); GZIPInputStream g=new GZIPInputStream(new ByteArrayInputStream(z)); ByteArrayOutputStream o=new ByteArrayOutputStream(1800000); byte[] b=new byte[8192]; int n; while((n=g.read(b))>0)o.write(b,0,n); g.close(); return new String(o.toByteArray(),"UTF-8"); }catch(Exception e){ return "<html><body style=\\"background:#111;color:white\\">GRIND & WELD payload error</body></html>"; }} }\n')
-          print('three bytes',len(three.encode()),'base game bytes',len((root/'game/grind_weld_v2.js').read_bytes()),'patch bytes',len(patch.encode()),'html bytes',len(final.encode()),'gzip bytes',len(raw),'chunks',len(chunks))
+          print('three bytes',len(three.encode()),'base game bytes',len((root/'game/grind_weld_v2.js').read_bytes()),'patch bytes',len(patch.encode()),'hotfix bytes',len(hotfix.encode()),'html bytes',len(final.encode()),'gzip bytes',len(raw),'chunks',len(chunks))
           PY
 
       - name: Install isolated Grind Weld source
