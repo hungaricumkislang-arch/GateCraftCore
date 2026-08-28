@@ -1,8 +1,8 @@
-name: Build GateCraftGame AIX Canary
+name: Build GateCraftGame Overlay AIX Canary
 
 on:
   push:
-    branches: [ easter-workshop-run-canary ]
+    branches: [ workshop-overlay-v2-canary ]
   workflow_dispatch:
 
 permissions:
@@ -35,6 +35,59 @@ jobs:
           cp -R game_extension/src/* buildenv/src/
           find buildenv/src -type f -print
 
+      - name: Patch GateCraftGame v2 screenless overlay runtime
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = next(Path('buildenv/src').rglob('GateCraftGame.java'))
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace('import android.content.Context;\n', 'import android.app.Activity;\nimport android.app.Dialog;\nimport android.content.Context;\n', 1)
+          s = s.replace('import android.os.SystemClock;\n', 'import android.os.Handler;\nimport android.os.Looper;\nimport android.os.SystemClock;\n', 1)
+          s = s.replace('import android.view.View;\n', 'import android.view.View;\nimport android.view.ViewGroup;\nimport android.view.Window;\nimport android.view.WindowManager;\nimport android.widget.Button;\n', 1)
+          s = s.replace('import com.google.appinventor.components.runtime.AndroidViewComponent;\n', 'import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;\n', 1)
+
+          s = s.replace('    version = 1,', '    version = 2,', 1)
+          s = s.replace('    description = "GateCraft Workshop Run: isolated offline pixel platformer easter egg.",', '    description = "GateCraft Workshop Run v2: screenless fullscreen overlay easter egg.",', 1)
+          s = s.replace('    nonVisible = false,', '    nonVisible = true,', 1)
+          s = s.replace('public class GateCraftGame extends AndroidViewComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {', 'public class GateCraftGame extends AndroidNonvisibleComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {', 1)
+
+          old_fields = '''  private final GameView gameView;\n  private boolean started;\n'''
+          new_fields = '''  private final GameView gameView;\n  private final Activity activity;\n  private final Handler mainHandler = new Handler(Looper.getMainLooper());\n  private Dialog gameDialog;\n  private boolean started;\n  private boolean buttonHooked;\n'''
+          if old_fields not in s: raise SystemExit('field pattern missing')
+          s = s.replace(old_fields, new_fields, 1)
+
+          old_ctor = '''  public GateCraftGame(ComponentContainer container) {\n    super(container);\n    gameView = new GameView(container.$context());\n    container.$add(this);\n    Width(Component.LENGTH_FILL_PARENT);\n    Height(Component.LENGTH_FILL_PARENT);\n    container.$form().registerForOnPause(this);\n    container.$form().registerForOnResume(this);\n    container.$form().registerForOnDestroy(this);\n  }\n\n  @Override\n  public View getView() {\n    return gameView;\n  }\n'''
+          new_ctor = '''  public GateCraftGame(ComponentContainer container) {\n    super(container.$form());\n    activity = container.$context();\n    gameView = new GameView(activity);\n    container.$form().registerForOnPause(this);\n    container.$form().registerForOnResume(this);\n    container.$form().registerForOnDestroy(this);\n    scheduleWorkshopButtonHook(0);\n  }\n\n  private void scheduleWorkshopButtonHook(final int attempt) {\n    mainHandler.postDelayed(new Runnable() {\n      @Override public void run() {\n        if (buttonHooked) return;\n        if (hookWorkshopButton()) return;\n        if (attempt < 40) scheduleWorkshopButtonHook(attempt + 1);\n      }\n    }, attempt == 0 ? 0L : 250L);\n  }\n\n  private boolean hookWorkshopButton() {\n    try {\n      View root = activity.findViewById(android.R.id.content);\n      final Button b = findWorkshopButton(root);\n      if (b == null) return false;\n      b.setOnClickListener(new View.OnClickListener() {\n        @Override public void onClick(View v) { showGameOverlay(); }\n      });\n      buttonHooked = true;\n      return true;\n    } catch (Throwable ignored) {\n      return false;\n    }\n  }\n\n  private Button findWorkshopButton(View root) {\n    if (root == null) return null;\n    if (root instanceof Button) {\n      CharSequence cs = ((Button) root).getText();\n      if (cs != null && "Workshop Run".equalsIgnoreCase(cs.toString().trim())) return (Button) root;\n    }\n    if (root instanceof ViewGroup) {\n      ViewGroup g = (ViewGroup) root;\n      for (int i = 0; i < g.getChildCount(); i++) {\n        Button b = findWorkshopButton(g.getChildAt(i));\n        if (b != null) return b;\n      }\n    }\n    return null;\n  }\n\n  private void showGameOverlay() {\n    try {\n      if (gameDialog == null) {\n        gameDialog = new Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen);\n        gameDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);\n        gameDialog.setCancelable(true);\n        gameDialog.setContentView(gameView);\n        Window w = gameDialog.getWindow();\n        if (w != null) {\n          w.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);\n          w.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);\n        }\n      }\n      started = true;\n      gameView.startNewGame();\n      gameDialog.show();\n      Window w = gameDialog.getWindow();\n      if (w != null) w.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);\n    } catch (Throwable ignored) {\n      started = false;\n    }\n  }\n\n  private void hideGameOverlay() {\n    started = false;\n    gameView.shutdown();\n    try { if (gameDialog != null && gameDialog.isShowing()) gameDialog.dismiss(); } catch (Throwable ignored) {}\n  }\n'''
+          if old_ctor not in s: raise SystemExit('constructor pattern missing')
+          s = s.replace(old_ctor, new_ctor, 1)
+
+          old_start = '''  @SimpleFunction(description = "Starts the Workshop Run game at level 1.")\n  public void StartGame() {\n    started = true;\n    gameView.startNewGame();\n  }\n'''
+          new_start = '''  @SimpleFunction(description = "Starts the Workshop Run game as a fullscreen overlay.")\n  public void StartGame() {\n    showGameOverlay();\n  }\n'''
+          if old_start not in s: raise SystemExit('StartGame pattern missing')
+          s = s.replace(old_start, new_start, 1)
+
+          old_stop = '''  @SimpleFunction(description = "Stops the game and releases transient resources.")\n  public void StopGame() {\n    started = false;\n    gameView.shutdown();\n  }\n'''
+          new_stop = '''  @SimpleFunction(description = "Stops the game and closes the Workshop Run overlay.")\n  public void StopGame() {\n    hideGameOverlay();\n  }\n'''
+          if old_stop not in s: raise SystemExit('StopGame pattern missing')
+          s = s.replace(old_stop, new_stop, 1)
+
+          s = s.replace('    return "1.0.0";', '    return "2.0.0";', 1)
+
+          old_exit = '''  @SimpleEvent(description = "Raised when the player taps the in-game EXIT control.")\n  public void ExitRequested() {\n    EventDispatcher.dispatchEvent(this, "ExitRequested");\n  }\n'''
+          new_exit = '''  @SimpleEvent(description = "Raised when the player taps the in-game EXIT control.")\n  public void ExitRequested() {\n    EventDispatcher.dispatchEvent(this, "ExitRequested");\n    hideGameOverlay();\n  }\n'''
+          if old_exit not in s: raise SystemExit('ExitRequested pattern missing')
+          s = s.replace(old_exit, new_exit, 1)
+
+          old_destroy = '''  @Override\n  public void onDestroy() {\n    started = false;\n    gameView.shutdown();\n  }\n'''
+          new_destroy = '''  @Override\n  public void onDestroy() {\n    hideGameOverlay();\n    try { if (gameDialog != null) gameDialog.dismiss(); } catch (Throwable ignored) {}\n    gameDialog = null;\n  }\n'''
+          if old_destroy not in s: raise SystemExit('onDestroy pattern missing')
+          s = s.replace(old_destroy, new_destroy, 1)
+
+          p.write_text(s, encoding='utf-8')
+          print('patched', p)
+          PY
+
       - name: Build GateCraftGame AIX
         run: |
           cd buildenv
@@ -46,6 +99,6 @@ jobs:
       - name: Upload GateCraftGame AIX
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGame-v1.0-aix
+          name: GateCraftGame-v2.0-overlay-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
