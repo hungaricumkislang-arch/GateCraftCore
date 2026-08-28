@@ -3,6 +3,7 @@ package com.gatecraft.grindweld;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.content.pm.ActivityInfo;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
@@ -27,7 +28,7 @@ import com.google.appinventor.components.runtime.OnDestroyListener;
 import com.google.appinventor.components.runtime.OnPauseListener;
 import com.google.appinventor.components.runtime.OnResumeListener;
 
-@DesignerComponent(version = 1, description = "GRIND & WELD: RUST & STEEL offline lazy WebGL/Three.js bonus game launcher.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
+@DesignerComponent(version = 2, description = "GRIND & WELD: RUST & STEEL v2 offline lazy isometric Three.js ARPG with full-screen landscape lifecycle.", category = ComponentCategory.EXTENSION, nonVisible = true, iconName = "")
 @SimpleObject(external = true)
 public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements OnPauseListener, OnResumeListener, OnDestroyListener {
   private final Activity activity;
@@ -40,6 +41,8 @@ public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements On
   private int language = 2;
   private boolean testMode = true;
   private String saveData = "";
+  private int previousOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+  private boolean orientationChanged;
 
   public GateCraftGrindWeld(ComponentContainer container) {
     super(container.$form());
@@ -82,30 +85,78 @@ public class GateCraftGrindWeld extends AndroidNonvisibleComponent implements On
   @SimpleFunction public boolean IsUnlocked() { return unlocked(); }
   @SimpleFunction public void StartGame() { if (!unlocked()) return; main.post(new Runnable(){@Override public void run(){openGame();}}); }
   @SimpleFunction public void StopGame() { main.post(new Runnable(){@Override public void run(){closeGame(false);}}); }
-  @SimpleFunction public String Version() { return "1.0.0"; }
+  @SimpleFunction public String Version() { return "2.0.0"; }
+
+  private void enterLandscape() {
+    try {
+      previousOrientation = activity.getRequestedOrientation();
+      if (previousOrientation != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+        orientationChanged = true;
+        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+      }
+    } catch (Throwable ignored) { orientationChanged = false; }
+  }
+
+  private void restoreOrientation() {
+    if (!orientationChanged) return;
+    orientationChanged = false;
+    try { activity.setRequestedOrientation(previousOrientation); } catch (Throwable ignored) {}
+  }
 
   private void openGame() {
     closeGame(false);
     try {
+      enterLandscape();
       final WebView wv = new WebView(activity); web = wv;
-      WebSettings s=wv.getSettings(); s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setAllowFileAccess(false); s.setAllowContentAccess(false); s.setMediaPlaybackRequiresUserGesture(true);
-      wv.setWebChromeClient(new WebChromeClient()); wv.setLayerType(View.LAYER_TYPE_HARDWARE,null); wv.addJavascriptInterface(new Bridge(),"GateCraftNative");
-      dialog=new Dialog(activity,android.R.style.Theme_Black_NoTitleBar_Fullscreen); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE); dialog.setCancelable(true); dialog.setContentView(wv);
-      dialog.setOnDismissListener(new DialogInterface.OnDismissListener(){@Override public void onDismiss(DialogInterface d){destroyWebView();}});
-      Window win=dialog.getWindow(); if(win!=null){win.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);} dialog.show();
-      win=dialog.getWindow(); if(win!=null)win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);
+      WebSettings s=wv.getSettings();
+      s.setJavaScriptEnabled(true);
+      s.setDomStorageEnabled(true);
+      s.setAllowFileAccess(false);
+      s.setAllowContentAccess(false);
+      s.setMediaPlaybackRequiresUserGesture(true);
+      s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+      wv.setWebChromeClient(new WebChromeClient());
+      wv.setLayerType(View.LAYER_TYPE_HARDWARE,null);
+      wv.setBackgroundColor(android.graphics.Color.BLACK);
+      wv.addJavascriptInterface(new Bridge(),"GateCraftNative");
+      dialog=new Dialog(activity,android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+      dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+      dialog.setCancelable(true);
+      dialog.setContentView(wv);
+      dialog.setOnDismissListener(new DialogInterface.OnDismissListener(){@Override public void onDismiss(DialogInterface d){destroyWebView();restoreOrientation();}});
+      Window win=dialog.getWindow();
+      if(win!=null){
+        win.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);
+      }
+      dialog.show();
+      win=dialog.getWindow();
+      if(win!=null){
+        win.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);
+        View decor=win.getDecorView();
+        if(decor!=null)decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LOW_PROFILE);
+      }
       wv.loadDataWithBaseURL("https://gatecraft.local/",Payload.html(),"text/html","UTF-8",null);
     } catch(Throwable t){closeGame(false);GameError(String.valueOf(t.getMessage()));}
   }
   private void closeGame(boolean dispatchExit) {
     try { if(web!=null) web.evaluateJavascript("window.GW&&GW.shutdown&&GW.shutdown();",null); } catch(Throwable ignored){}
     try { if(dialog!=null&&dialog.isShowing())dialog.dismiss(); } catch(Throwable ignored){}
-    destroyWebView(); dialog=null; if(dispatchExit)ExitRequested();
+    destroyWebView();
+    dialog=null;
+    restoreOrientation();
+    if(dispatchExit)ExitRequested();
   }
   private void destroyWebView() {
     final WebView wv=web; web=null; if(wv==null)return;
-    try{wv.stopLoading();}catch(Throwable ignored){} try{wv.loadUrl("about:blank");}catch(Throwable ignored){} try{wv.clearHistory();}catch(Throwable ignored){} try{wv.removeJavascriptInterface("GateCraftNative");}catch(Throwable ignored){}
-    try{ViewGroup p=(ViewGroup)wv.getParent();if(p!=null)p.removeView(wv);}catch(Throwable ignored){} try{wv.destroy();}catch(Throwable ignored){}
+    try{wv.onPause();}catch(Throwable ignored){}
+    try{wv.stopLoading();}catch(Throwable ignored){}
+    try{wv.loadUrl("about:blank");}catch(Throwable ignored){}
+    try{wv.clearHistory();}catch(Throwable ignored){}
+    try{wv.clearCache(false);}catch(Throwable ignored){}
+    try{wv.removeJavascriptInterface("GateCraftNative");}catch(Throwable ignored){}
+    try{ViewGroup p=(ViewGroup)wv.getParent();if(p!=null)p.removeView(wv);}catch(Throwable ignored){}
+    try{wv.destroy();}catch(Throwable ignored){}
   }
   private final class Bridge {
     @JavascriptInterface public int language(){return language;}
