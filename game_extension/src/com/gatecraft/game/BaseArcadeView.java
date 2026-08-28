@@ -6,6 +6,8 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
@@ -22,6 +24,7 @@ abstract class BaseArcadeView extends View implements GameMetrics {
   private final RectF exitRect = new RectF(838, 12, 946, 58);
   private final float[] touchX=new float[16], touchY=new float[16];
   private final boolean[] touchActive=new boolean[16];
+  private ToneGenerator tones;
 
   BaseArcadeView(Context c, GateCraftGame owner) {
     super(c);
@@ -36,7 +39,7 @@ abstract class BaseArcadeView extends View implements GameMetrics {
   @Override public void setPaused(boolean value) { paused = value; lastFrame = SystemClock.uptimeMillis(); if (!value) invalidate(); }
   @Override public int level() { return 1; }
   @Override public int lives() { return 3; }
-  @Override public void shutdown() { paused = true; clearTouches(); }
+  @Override public void shutdown() { paused = true; clearTouches(); if(tones!=null){try{tones.release();}catch(Throwable ignored){}tones=null;} }
 
   @Override protected final void onDraw(Canvas c) {
     super.onDraw(c);
@@ -67,7 +70,6 @@ abstract class BaseArcadeView extends View implements GameMetrics {
 
   @Override public boolean onTouchEvent(MotionEvent e) {
     int action=e.getActionMasked(), ai=e.getActionIndex();
-    // Refresh all pointers first so simultaneous direction + action works.
     for(int i=0;i<e.getPointerCount();i++){
       int id=e.getPointerId(i);if(id<0||id>=touchActive.length)continue;
       touchX[id]=(e.getX(i)-ox)/scale;touchY[id]=(e.getY(i)-oy)/scale;touchActive[id]=true;
@@ -86,6 +88,7 @@ abstract class BaseArcadeView extends View implements GameMetrics {
 
   boolean touched(RectF r){for(int i=0;i<touchActive.length;i++)if(touchActive[i]&&r.contains(touchX[i],touchY[i]))return true;return false;}
   private void clearTouches(){for(int i=0;i<touchActive.length;i++)touchActive[i]=false;}
+  void tone(int code,int ms){try{if(tones==null)tones=new ToneGenerator(AudioManager.STREAM_MUSIC,28);tones.startTone(code,ms);}catch(Throwable ignored){}}
 
   String t(String hu,String en,String de,String es,String fr,String zh,String it,String pt,String pl,String nl,String ro,String ru) {
     String[] a={hu,en,de,es,fr,zh,it,pt,pl,nl,ro,ru}; return a[Math.max(0,Math.min(11,lang-1))];
