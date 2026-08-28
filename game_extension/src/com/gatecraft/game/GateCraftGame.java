@@ -26,7 +26,7 @@ import com.google.appinventor.components.runtime.OnResumeListener;
 
 @DesignerComponent(
     version = 8,
-    description = "GateCraft Arcade Suite v6.0 Classic Heritage: three isolated full-screen 90s-inspired games with run-and-gun boss stages, deeper turn-based workshop strategy and a five-rival arcade fighting ladder. Multi-touch, 12-language UI, staged unlocks and lazy memory release preserved.",
+    description = "GateCraft Arcade Suite v6.0 Classic Heritage: Workshop Run run-and-gun sectors and bosses, Heroes weekly strategy/mines/recruitment/rival AI, and Metal Fighter arcade ladder/parry/throw/super. Full-screen landscape, multi-touch, 12-language UI and lazy memory release preserved.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     iconName = "")
@@ -45,8 +45,8 @@ public class GateCraftGame extends AndroidNonvisibleComponent implements OnPause
   private void restoreOrientation(){if(!orientationChanged)return;orientationChanged=false;try{activity.setRequestedOrientation(previousOrientation);}catch(Throwable ignored){}}
   private void showGameOverlay(){try{closeGameOverlay(false);enterLandscape();dialog=new Dialog(activity,android.R.style.Theme_Black_NoTitleBar_Fullscreen);dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);dialog.setCancelable(true);dialog.setOnDismissListener(new DialogInterface.OnDismissListener(){@Override public void onDismiss(DialogInterface d){releaseActive();dialog=null;started=false;restoreOrientation();}});showLauncherInsideDialog();Window w=dialog.getWindow();if(w!=null){w.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);w.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);}started=true;dialog.show();w=dialog.getWindow();if(w!=null){w.setLayout(WindowManager.LayoutParams.MATCH_PARENT,WindowManager.LayoutParams.MATCH_PARENT);View decor=w.getDecorView();if(decor!=null)decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LOW_PROFILE);}}catch(Throwable t){closeGameOverlay(false);}}
   private void setActive(View v,GameMetrics m){releaseActive();activeView=v;metrics=m;if(metrics!=null){metrics.setLanguage(language);metrics.setPaused(false);}if(dialog!=null)dialog.setContentView(v);}
-  private void showLauncherInsideDialog(){setActive(new GameLauncherView(activity,this),null);}
-  void launchMode(int mode){if(mode==1)setActive(new WorkshopRunV5View(activity,this),null);else if(mode==2)setActive(new HeroesCraftV5View(activity,this),null);else if(mode==3)setActive(new MetalFighterV5View(activity,this),null);if(activeView instanceof GameMetrics)metrics=(GameMetrics)activeView;if(metrics!=null){metrics.setLanguage(language);metrics.setPaused(false);}}
+  private void showLauncherInsideDialog(){setActive(new GameLauncherV6View(activity,this),null);}
+  void launchMode(int mode){if(mode==1)setActive(new WorkshopRunV6View(activity,this),null);else if(mode==2)setActive(new HeroesCraftV6View(activity,this),null);else if(mode==3)setActive(new MetalFighterV6View(activity,this),null);if(activeView instanceof GameMetrics)metrics=(GameMetrics)activeView;if(metrics!=null){metrics.setLanguage(language);metrics.setPaused(false);}}
   void returnToLauncher(){showLauncherInsideDialog();} int getCalculationCount(){return calculationCount;} boolean isTestMode(){return testMode;} int getLanguage(){return language;}
   boolean modeUnlocked(int mode){if(mode<=1)return calculationCount>=1;if(testMode)return calculationCount>=1;if(mode==2)return calculationCount>=10;if(mode==3)return calculationCount>=20;return false;} int requiredFor(int mode){if(mode<=1)return 1;if(mode==2)return 10;if(mode==3)return 20;return 999;}
   private void releaseActive(){if(metrics!=null){try{metrics.shutdown();}catch(Throwable ignored){}}activeView=null;metrics=null;}
