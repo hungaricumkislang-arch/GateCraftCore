@@ -20,6 +20,8 @@ abstract class BaseArcadeView extends View implements GameMetrics {
   long lastFrame = SystemClock.uptimeMillis();
   private final RectF backRect = new RectF(14, 12, 112, 58);
   private final RectF exitRect = new RectF(838, 12, 946, 58);
+  private final float[] touchX=new float[16], touchY=new float[16];
+  private final boolean[] touchActive=new boolean[16];
 
   BaseArcadeView(Context c, GateCraftGame owner) {
     super(c);
@@ -34,7 +36,7 @@ abstract class BaseArcadeView extends View implements GameMetrics {
   @Override public void setPaused(boolean value) { paused = value; lastFrame = SystemClock.uptimeMillis(); if (!value) invalidate(); }
   @Override public int level() { return 1; }
   @Override public int lives() { return 3; }
-  @Override public void shutdown() { paused = true; }
+  @Override public void shutdown() { paused = true; clearTouches(); }
 
   @Override protected final void onDraw(Canvas c) {
     super.onDraw(c);
@@ -64,16 +66,26 @@ abstract class BaseArcadeView extends View implements GameMetrics {
   }
 
   @Override public boolean onTouchEvent(MotionEvent e) {
-    float x=(e.getX()-ox)/scale, y=(e.getY()-oy)/scale;
-    int a=e.getActionMasked();
-    if (a==MotionEvent.ACTION_DOWN) {
-      if (backRect.contains(x,y)) { owner.returnToLauncher(); return true; }
-      if (exitRect.contains(x,y)) { owner.requestExitFromView(); return true; }
-      onGameDown(x,y);
-    } else if (a==MotionEvent.ACTION_MOVE) onGameMove(x,y);
-    else if (a==MotionEvent.ACTION_UP || a==MotionEvent.ACTION_CANCEL) onGameUp(x,y);
+    int action=e.getActionMasked(), ai=e.getActionIndex();
+    // Refresh all pointers first so simultaneous direction + action works.
+    for(int i=0;i<e.getPointerCount();i++){
+      int id=e.getPointerId(i);if(id<0||id>=touchActive.length)continue;
+      touchX[id]=(e.getX(i)-ox)/scale;touchY[id]=(e.getY(i)-oy)/scale;touchActive[id]=true;
+    }
+    float x=(e.getX(ai)-ox)/scale, y=(e.getY(ai)-oy)/scale;
+    if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN){
+      if(backRect.contains(x,y)){owner.returnToLauncher();return true;}
+      if(exitRect.contains(x,y)){owner.requestExitFromView();return true;}
+      onGameDown(x,y);onGameMove(x,y);
+    }else if(action==MotionEvent.ACTION_MOVE){onGameMove(x,y);
+    }else if(action==MotionEvent.ACTION_POINTER_UP){int id=e.getPointerId(ai);if(id>=0&&id<touchActive.length)touchActive[id]=false;onGameUp(x,y);onGameMove(x,y);
+    }else if(action==MotionEvent.ACTION_UP){clearTouches();onGameUp(x,y);onGameMove(x,y);
+    }else if(action==MotionEvent.ACTION_CANCEL){clearTouches();onGameUp(x,y);}
     return true;
   }
+
+  boolean touched(RectF r){for(int i=0;i<touchActive.length;i++)if(touchActive[i]&&r.contains(touchX[i],touchY[i]))return true;return false;}
+  private void clearTouches(){for(int i=0;i<touchActive.length;i++)touchActive[i]=false;}
 
   String t(String hu,String en,String de,String es,String fr,String zh,String it,String pt,String pl,String nl,String ro,String ru) {
     String[] a={hu,en,de,es,fr,zh,it,pt,pl,nl,ro,ru}; return a[Math.max(0,Math.min(11,lang-1))];
