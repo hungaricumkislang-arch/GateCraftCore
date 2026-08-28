@@ -9,8 +9,10 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.ValueCallback;
@@ -41,14 +43,19 @@ import java.util.Date;
 import java.util.Locale;
 
 @DesignerComponent(
-        version = 3,
-        versionName = "2.3.0",
+        version = 4,
+        versionName = "2.4.0",
         description = "GateCraft deterministic technical drawing PDF and share runtime.",
         category = ComponentCategory.EXTENSION,
         nonVisible = true,
         iconName = "images/extension.png")
 @SimpleObject(external = true)
 public class GateCraftDrawing extends AndroidNonvisibleComponent {
+    private static final int RENDER_W = 1200;
+    private static final int RENDER_H = 700;
+    private static final int MAX_READY_ATTEMPTS = 50;
+    private static final int MAX_STABILITY_ATTEMPTS = 6;
+
     private final Form form;
     private final Context context;
     private volatile String lastError = "";
@@ -65,7 +72,7 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
     }
 
     @SimpleFunction(description = "Returns the GateCraft drawing runtime version.")
-    public String Version() { return "2.3.0"; }
+    public String Version() { return "2.4.0"; }
 
     @SimpleFunction(description = "Returns the last PDF/share error, or an empty string.")
     public String LastError() { return lastError == null ? "" : lastError; }
@@ -113,9 +120,11 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
             renderWebView = web;
             web.setBackgroundColor(0xFFFFFFFF);
             web.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+            web.setHorizontalScrollBarEnabled(false);
+            web.setVerticalScrollBarEnabled(false);
             web.setX(-10000f);
             web.setY(-10000f);
-            renderParent.addView(web, new ViewGroup.LayoutParams(1200, 700));
+            renderParent.addView(web, new ViewGroup.LayoutParams(RENDER_W, RENDER_H));
 
             WebSettings settings = web.getSettings();
             settings.setJavaScriptEnabled(true);
@@ -123,13 +132,15 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
             settings.setAllowContentAccess(true);
             settings.setDomStorageEnabled(false);
             settings.setLoadsImagesAutomatically(true);
+            settings.setLoadWithOverviewMode(false);
+            settings.setUseWideViewPort(false);
 
             web.setWebViewClient(new WebViewClient() {
                 private boolean completed = false;
                 @Override public void onPageFinished(WebView view, String url) {
                     if (completed) return;
                     completed = true;
-                    waitForRenderedSvg(web, chooserTitle, 0);
+                    waitForCanvasReady(web, chooserTitle, 0);
                 }
             });
             web.loadDataWithBaseURL("file:///android_asset/", injected, "text/html", "UTF-8", null);
@@ -138,30 +149,28 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
         }
     }
 
-    private void waitForRenderedSvg(final WebView web, final String chooserTitle, final int attempt) {
+    private void waitForCanvasReady(final WebView web, final String chooserTitle, final int attempt) {
         if (web != renderWebView) {
             failAsync(new IllegalStateException("PDF renderer replaced"));
             return;
         }
-        if (attempt > 30) {
-            failAsync(new IllegalStateException("Drawing SVG did not become ready"));
+        if (attempt > MAX_READY_ATTEMPTS) {
+            failAsync(new IllegalStateException("Drawing canvas did not become ready"));
             return;
         }
         try {
             web.evaluateJavascript(
-                "(function(){try{var e=document.body&&document.body.getAttribute('data-gc-pdf-error');if(e)return 'ERR:'+e;var s=document.getElementById('svg');if(!s)return 'WAIT';var b=s.getBoundingClientRect();var n=s.querySelectorAll('*').length;return (n>0&&b.width>10&&b.height>10)?'READY':'WAIT';}catch(e){return 'ERR:'+String(e);}})()",
+                "(function(){try{var b=document.body;if(!b)return 'WAIT';var e=b.getAttribute('data-gc-pdf-error');if(e)return 'ERR:'+e;var c=document.getElementById('gcPdfCanvas');var r=b.getAttribute('data-gc-pdf-painted');if(c&&r==='1'&&c.width===1200&&c.height===700)return 'READY';return 'WAIT';}catch(e){return 'ERR:'+String(e);}})()",
                 new ValueCallback<String>() {
                     @Override public void onReceiveValue(String value) {
                         String v = value == null ? "" : value;
                         if (v.indexOf("READY") >= 0) {
-                            mainHandler.postDelayed(new Runnable() {
-                                @Override public void run() { renderAttachedWebViewToPdf(web, chooserTitle); }
-                            }, 250L);
+                            waitForChromiumVisualCommit(web, chooserTitle);
                         } else if (v.indexOf("ERR:") >= 0) {
-                            failAsync(new IllegalStateException("Drawing render error: " + v));
+                            failAsync(new IllegalStateException("Drawing render error: " + cleanJsValue(v)));
                         } else {
                             mainHandler.postDelayed(new Runnable() {
-                                @Override public void run() { waitForRenderedSvg(web, chooserTitle, attempt + 1); }
+                                @Override public void run() { waitForCanvasReady(web, chooserTitle, attempt + 1); }
                             }, 100L);
                         }
                     }
@@ -171,33 +180,131 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
         }
     }
 
-    private void renderAttachedWebViewToPdf(WebView web, String chooserTitle) {
-        Bitmap bitmap = null;
+    private void waitForChromiumVisualCommit(final WebView web, final String chooserTitle) {
+        if (web != renderWebView) return;
+        if (Build.VERSION.SDK_INT >= 23) {
+            try {
+                web.postVisualStateCallback(SystemClock.uptimeMillis(), new WebView.VisualStateCallback() {
+                    @Override public void onComplete(long requestId) {
+                        mainHandler.postDelayed(new Runnable() {
+                            @Override public void run() { captureStablePair(web, chooserTitle, 0, null, null); }
+                        }, 250L);
+                    }
+                });
+                return;
+            } catch (Throwable ignored) { }
+        }
+        mainHandler.postDelayed(new Runnable() {
+            @Override public void run() { captureStablePair(web, chooserTitle, 0, null, null); }
+        }, 900L);
+    }
+
+    private void captureStablePair(final WebView web, final String chooserTitle, final int attempt,
+                                   final Bitmap previous, final BitmapStats previousStats) {
+        if (web != renderWebView || web.getParent() == null) {
+            recycle(previous);
+            failAsync(new IllegalStateException("PDF WebView is not attached"));
+            return;
+        }
+        if (attempt > MAX_STABILITY_ATTEMPTS) {
+            recycle(previous);
+            failAsync(new IllegalStateException("Drawing did not reach a stable rendered frame"));
+            return;
+        }
+
+        Bitmap current = null;
+        try {
+            current = captureBitmap(web);
+            BitmapStats currentStats = analyzeBitmap(current);
+            validateBitmapStats(currentStats);
+
+            if (previous != null && previousStats != null && framesStable(previousStats, currentStats)) {
+                recycle(previous);
+                writeBitmapPdfAndShare(current, chooserTitle);
+                return;
+            }
+
+            recycle(previous);
+            final Bitmap keep = current;
+            final BitmapStats keepStats = currentStats;
+            mainHandler.postDelayed(new Runnable() {
+                @Override public void run() {
+                    captureStablePair(web, chooserTitle, attempt + 1, keep, keepStats);
+                }
+            }, 350L);
+        } catch (Throwable t) {
+            recycle(current);
+            recycle(previous);
+            failAsync(t);
+        }
+    }
+
+    private Bitmap captureBitmap(WebView web) {
+        int wSpec = View.MeasureSpec.makeMeasureSpec(RENDER_W, View.MeasureSpec.EXACTLY);
+        int hSpec = View.MeasureSpec.makeMeasureSpec(RENDER_H, View.MeasureSpec.EXACTLY);
+        web.measure(wSpec, hSpec);
+        web.layout(0, 0, RENDER_W, RENDER_H);
+        web.invalidate();
+        Bitmap bitmap = Bitmap.createBitmap(RENDER_W, RENDER_H, Bitmap.Config.ARGB_8888);
+        Canvas capture = new Canvas(bitmap);
+        capture.drawColor(0xFFFFFFFF);
+        web.draw(capture);
+        return bitmap;
+    }
+
+    private BitmapStats analyzeBitmap(Bitmap bitmap) {
+        long nonWhite = 0L;
+        long darkSum = 0L;
+        long hash = 1469598103934665603L;
+        int samples = 0;
+        for (int y = 0; y < bitmap.getHeight(); y += 4) {
+            for (int x = 0; x < bitmap.getWidth(); x += 4) {
+                int c = bitmap.getPixel(x, y);
+                int a = (c >>> 24) & 255;
+                int r = (c >>> 16) & 255;
+                int g = (c >>> 8) & 255;
+                int b = c & 255;
+                int darkness = 765 - (r + g + b);
+                if (a > 20 && darkness > 30) {
+                    nonWhite++;
+                    darkSum += darkness;
+                }
+                hash ^= (long)c & 0xffffffffL;
+                hash *= 1099511628211L;
+                samples++;
+            }
+        }
+        return new BitmapStats(nonWhite, darkSum, hash, samples);
+    }
+
+    private void validateBitmapStats(BitmapStats stats) {
+        if (stats == null || stats.samples < 1000) throw new IllegalStateException("Drawing bitmap is invalid");
+        if (stats.nonWhite < 350L || stats.darkSum < 50000L) {
+            throw new IllegalStateException("Drawing renderer produced an incomplete or blank image");
+        }
+    }
+
+    private boolean framesStable(BitmapStats a, BitmapStats b) {
+        long countDiff = Math.abs(a.nonWhite - b.nonWhite);
+        long darkDiff = Math.abs(a.darkSum - b.darkSum);
+        long countTol = Math.max(4L, a.nonWhite / 200L);
+        long darkTol = Math.max(1000L, a.darkSum / 200L);
+        return countDiff <= countTol && darkDiff <= darkTol && a.hash == b.hash;
+    }
+
+    private void writeBitmapPdfAndShare(Bitmap bitmap, String chooserTitle) {
         PdfDocument pdf = null;
         FileOutputStream out = null;
         try {
-            if (web != renderWebView || web.getParent() == null) throw new IllegalStateException("PDF WebView is not attached");
-            int wSpec = View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.EXACTLY);
-            int hSpec = View.MeasureSpec.makeMeasureSpec(700, View.MeasureSpec.EXACTLY);
-            web.measure(wSpec, hSpec);
-            web.layout(0, 0, 1200, 700);
-            web.invalidate();
-
-            bitmap = Bitmap.createBitmap(1200, 700, Bitmap.Config.ARGB_8888);
-            Canvas capture = new Canvas(bitmap);
-            capture.drawColor(0xFFFFFFFF);
-            web.draw(capture);
-            validateBitmap(bitmap);
-
             pdf = new PdfDocument();
             PdfDocument.PageInfo info = new PdfDocument.PageInfo.Builder(842, 595, 1).create();
             PdfDocument.Page page = pdf.startPage(info);
             Canvas canvas = page.getCanvas();
             canvas.drawColor(0xFFFFFFFF);
             float margin = 22f;
-            float scale = Math.min((842f - 2f * margin) / 1200f, (595f - 2f * margin) / 700f);
-            float dw = 1200f * scale;
-            float dh = 700f * scale;
+            float scale = Math.min((842f - 2f * margin) / RENDER_W, (595f - 2f * margin) / RENDER_H);
+            float dw = RENDER_W * scale;
+            float dh = RENDER_H * scale;
             float left = (842f - dw) / 2f;
             float top = (595f - dh) / 2f;
             Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
@@ -213,35 +320,14 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
             pdf.close();
             pdf = null;
             validatePdf(file);
+            recycle(bitmap);
             sharePdf(file, chooserTitle);
         } catch (Throwable t) {
             if (out != null) try { out.close(); } catch (Throwable ignored) {}
             if (pdf != null) try { pdf.close(); } catch (Throwable ignored) {}
+            recycle(bitmap);
             failAsync(t);
-        } finally {
-            if (bitmap != null) try { bitmap.recycle(); } catch (Throwable ignored) {}
         }
-    }
-
-    private void validateBitmap(Bitmap bitmap) {
-        if (bitmap == null || bitmap.getWidth() < 100 || bitmap.getHeight() < 100) {
-            throw new IllegalStateException("Drawing bitmap is invalid");
-        }
-        int nonWhite = 0;
-        for (int y = 0; y < bitmap.getHeight(); y += 4) {
-            for (int x = 0; x < bitmap.getWidth(); x += 4) {
-                int c = bitmap.getPixel(x, y);
-                int a = (c >>> 24) & 255;
-                int r = (c >>> 16) & 255;
-                int g = (c >>> 8) & 255;
-                int b = c & 255;
-                if (a > 20 && (r < 245 || g < 245 || b < 245)) {
-                    nonWhite++;
-                    if (nonWhite >= 120) return;
-                }
-            }
-        }
-        throw new IllegalStateException("Drawing renderer produced a blank image");
     }
 
     private File createOutputFile() throws Exception {
@@ -277,7 +363,7 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
         String title = chooserTitle == null || chooserTitle.trim().length() == 0
                 ? "Share GateCraft PDF" : chooserTitle.trim();
         context.startActivity(Intent.createChooser(send, title));
-        Toast.makeText(context, successText(), Toast.LENGTH_SHORT).show();
+        Toast.makeText(context, "GateCraft PDF ready", Toast.LENGTH_SHORT).show();
         pdfBusy = false;
         destroyRenderer();
     }
@@ -298,14 +384,40 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
 
     private String injectPayload(String html, String payload) {
         String quoted = JSONObject.quote(payload);
-        String script = "<style>@page{size:A4 landscape;margin:0}html,body{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden!important}#svg{display:block!important;width:1200px!important;height:700px!important}</style>" +
-                "<script>(function(){try{if(typeof bootTimer!=='undefined')clearInterval(bootTimer);parseStart(" + quoted + ");render();safeDraw();var s=document.getElementById('svg');if(!s)throw new Error('SVG missing');var c=s.cloneNode(true);c.setAttribute('width','1200');c.setAttribute('height','700');c.setAttribute('viewBox','0 0 1200 700');c.style.width='1200px';c.style.height='700px';c.style.display='block';document.body.innerHTML='';document.body.style.margin='0';document.body.style.padding='0';document.body.style.background='#fff';document.body.style.overflow='hidden';document.body.appendChild(c);}catch(e){document.body.setAttribute('data-gc-pdf-error',String(e));}})();</script>";
+        String script =
+            "<style>html,body{margin:0!important;padding:0!important;background:#fff!important;overflow:hidden!important}</style>" +
+            "<script>(function(){" +
+            "function gcErr(e){try{document.body.setAttribute('data-gc-pdf-error',String(e&&e.message?e.message:e));}catch(x){}}" +
+            "try{" +
+            "if(typeof bootTimer!=='undefined')clearInterval(bootTimer);" +
+            "parseStart(" + quoted + ");render();if(!safeDraw())throw new Error('GateCraft safeDraw failed');" +
+            "var s=document.getElementById('svg');if(!s)throw new Error('SVG missing');" +
+            "var c=s.cloneNode(true);c.setAttribute('xmlns','http://www.w3.org/2000/svg');c.setAttribute('width','1200');c.setAttribute('height','700');c.setAttribute('viewBox','0 0 1200 700');" +
+            "var css='';try{for(var i=0;i<document.styleSheets.length;i++){var rr=document.styleSheets[i].cssRules||[];for(var j=0;j<rr.length;j++)css+=rr[j].cssText+'\\n';}}catch(ignore){}" +
+            "if(css){var d=document.createElementNS('http://www.w3.org/2000/svg','defs');var st=document.createElementNS('http://www.w3.org/2000/svg','style');st.setAttribute('type','text/css');st.textContent=css;d.appendChild(st);c.insertBefore(d,c.firstChild);}" +
+            "var xml=new XMLSerializer().serializeToString(c);var img=new Image();" +
+            "img.onload=function(){try{var cv=document.createElement('canvas');cv.id='gcPdfCanvas';cv.width=1200;cv.height=700;cv.style.width='1200px';cv.style.height='700px';cv.style.display='block';var cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,1200,700);cx.drawImage(img,0,0,1200,700);document.body.innerHTML='';document.body.style.margin='0';document.body.style.padding='0';document.body.style.background='#fff';document.body.appendChild(cv);document.body.setAttribute('data-gc-pdf-ready','1');requestAnimationFrame(function(){requestAnimationFrame(function(){document.body.setAttribute('data-gc-pdf-painted','1');});});}catch(e){gcErr(e);}};" +
+            "img.onerror=function(){gcErr('SVG rasterization failed');};" +
+            "img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml);" +
+            "}catch(e){gcErr(e);}" +
+            "})();</script>";
         String lower = html.toLowerCase(Locale.ROOT);
         int pos = lower.lastIndexOf("</body>");
         return pos >= 0 ? html.substring(0, pos) + script + html.substring(pos) : html + script;
     }
 
-    private String successText() { return "GateCraft PDF ready"; }
+    private String cleanJsValue(String v) {
+        if (v == null) return "";
+        String s = v;
+        if (s.length() >= 2 && s.charAt(0) == '"' && s.charAt(s.length() - 1) == '"') s = s.substring(1, s.length() - 1);
+        return s.replace("\\\"", "\"").replace("\\n", " ");
+    }
+
+    private void recycle(Bitmap bitmap) {
+        if (bitmap != null && !bitmap.isRecycled()) {
+            try { bitmap.recycle(); } catch (Throwable ignored) {}
+        }
+    }
 
     private void failAsync(final Throwable t) {
         mainHandler.post(new Runnable() {
@@ -337,6 +449,19 @@ public class GateCraftDrawing extends AndroidNonvisibleComponent {
             try { w.clearHistory(); } catch (Throwable ignored) {}
             try { w.removeAllViews(); } catch (Throwable ignored) {}
             try { w.destroy(); } catch (Throwable ignored) {}
+        }
+    }
+
+    private static final class BitmapStats {
+        final long nonWhite;
+        final long darkSum;
+        final long hash;
+        final int samples;
+        BitmapStats(long nonWhite, long darkSum, long hash, int samples) {
+            this.nonWhite = nonWhite;
+            this.darkSum = darkSum;
+            this.hash = hash;
+            this.samples = samples;
         }
     }
 }
