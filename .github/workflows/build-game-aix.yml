@@ -1,8 +1,8 @@
-name: Build GateCraftGame Suite v6 Classic Heritage AIX Canary
+name: Build GateCraftGame v6 Dynamic Runtime Canary
 
 on:
   push:
-    branches: [ game-suite-v6-classic-heritage ]
+    branches: [ game-suite-v6-dynamic-runtime ]
   workflow_dispatch:
 
 permissions:
@@ -24,28 +24,68 @@ jobs:
       - name: Install Ant
         run: |
           sudo apt-get update
-          sudo apt-get install -y ant
+          sudo apt-get install -y ant zip
 
       - name: Get MIT App Inventor extension template
         run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
 
-      - name: Install isolated arcade source
+      - name: Build gameplay runtime dex jar
+        run: |
+          set -euxo pipefail
+          mkdir -p runtime-src/com/gatecraft/game runtime-classes runtime-dex
+          for f in ArcadeFx.java BaseArcadeView.java GameLauncherV6View.java GameMetrics.java HeroesCraftV6View.java MetalFighterV6View.java SpriteKit.java WorkshopRunV6View.java; do
+            cp "game_extension/src/com/gatecraft/game/$f" runtime-src/com/gatecraft/game/
+          done
+          cat > runtime-src/com/gatecraft/game/GateCraftGame.java <<'JAVA'
+          package com.gatecraft.game;
+          public class GateCraftGame {
+            public int getCalculationCount(){return 0;}
+            public boolean isTestMode(){return true;}
+            public int getLanguage(){return 2;}
+            public boolean modeUnlocked(int mode){return true;}
+            public int requiredFor(int mode){return 1;}
+            public void launchMode(int mode){}
+            public void returnToLauncher(){}
+            public void requestExitFromView(){}
+            public void reportScore(int score){}
+            public void reportLevelComplete(int level,int score){}
+            public void reportGameComplete(int score){}
+            public void reportGameOver(int score){}
+          }
+          JAVA
+          ANDROID_JAR=$(find "$ANDROID_HOME/platforms" -name android.jar | sort -V | tail -1)
+          echo "ANDROID_JAR=$ANDROID_JAR"
+          javac -source 1.7 -target 1.7 -cp "$ANDROID_JAR" -d runtime-classes $(find runtime-src -name '*.java')
+          jar cf runtime-classes.jar -C runtime-classes .
+          D8=$(find "$ANDROID_HOME/build-tools" -type f -name d8 | sort -V | tail -1)
+          echo "D8=$D8"
+          "$D8" --min-api 21 --lib "$ANDROID_JAR" --output runtime-dex runtime-classes.jar
+          (cd runtime-dex && zip -q ../gatecraft_game_runtime.jar classes.dex)
+          unzip -l gatecraft_game_runtime.jar
+
+      - name: Install lightweight shell extension source
         run: |
           rm -rf buildenv/src/*
-          cp -R game_extension/src/* buildenv/src/
+          mkdir -p buildenv/src/com/gatecraft/game
+          cp game_extension/src/com/gatecraft/game/GateCraftGame.java buildenv/src/com/gatecraft/game/
+          cp game_extension/src/com/gatecraft/game/GameMetrics.java buildenv/src/com/gatecraft/game/
           find buildenv/src -type f -print
 
-      - name: Build GateCraftGame v6 AIX
+      - name: Build lightweight GateCraftGame AIX shell
         run: |
           cd buildenv
           ant clean extensions
 
       - name: Show generated artifacts
-        run: find buildenv/out -maxdepth 2 -type f -print
+        run: |
+          find buildenv/out -maxdepth 2 -type f -print
+          ls -l gatecraft_game_runtime.jar
 
-      - name: Upload GateCraftGame v6 AIX
+      - name: Upload dynamic runtime package
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGame-v6.0-classic-heritage-aix
-          path: buildenv/out/*.aix
+          name: GateCraftGame-v6.0-dynamic-runtime-aix
+          path: |
+            buildenv/out/*.aix
+            gatecraft_game_runtime.jar
           if-no-files-found: error
