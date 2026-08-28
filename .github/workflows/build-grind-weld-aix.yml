@@ -1,8 +1,8 @@
-name: Build GRIND WELD WebGL AIX Canary
+name: Build GRIND WELD WebGL v2.7 AIX Canary
 
 on:
   push:
-    branches: [ grind-weld-webgl-canary ]
+    branches: [ grind-weld-v27-endgame-canary ]
   workflow_dispatch:
 
 permissions:
@@ -45,6 +45,7 @@ jobs:
               root/'game/world_v24.js',
               root/'game/world_v25.js',
               root/'game/world_v26.js',
+              root/'game/world_v27.js',
           ]
           marker='function joyPoint(e){'
           assert marker in game
@@ -65,15 +66,16 @@ jobs:
               f.write('import android.util.Base64;\nimport java.io.ByteArrayInputStream;\nimport java.io.ByteArrayOutputStream;\nimport java.util.zip.GZIPInputStream;\n')
               f.write('final class Payload { private Payload(){} private static final String[] P={\n')
               for c in chunks: f.write('"'+c+'",\n')
-              f.write('}; static String html(){ try { StringBuilder s=new StringBuilder(); for(String p:P)s.append(p); byte[] z=Base64.decode(s.toString(),Base64.DEFAULT); GZIPInputStream g=new GZIPInputStream(new ByteArrayInputStream(z)); ByteArrayOutputStream o=new ByteArrayOutputStream(2400000); byte[] b=new byte[8192]; int n; while((n=g.read(b))>0)o.write(b,0,n); g.close(); return new String(o.toByteArray(),"UTF-8"); }catch(Exception e){ return "<html><body style=\\"background:#111;color:white\\">GRIND & WELD payload error</body></html>"; }} }\n')
+              f.write('}; static String html(){ try { StringBuilder s=new StringBuilder(); for(String p:P)s.append(p); byte[] z=Base64.decode(s.toString(),Base64.DEFAULT); GZIPInputStream g=new GZIPInputStream(new ByteArrayInputStream(z)); ByteArrayOutputStream o=new ByteArrayOutputStream(2600000); byte[] b=new byte[8192]; int n; while((n=g.read(b))>0)o.write(b,0,n); g.close(); return new String(o.toByteArray(),"UTF-8"); }catch(Exception e){ return "<html><body style=\\"background:#111;color:white\\">GRIND & WELD payload error</body></html>"; }} }\n')
           print('three',len(three.encode()),'game',len(game.encode()),'html',len(final.encode()),'gzip',len(raw),'chunks',len(chunks))
           PY
           node --check /tmp/gw-game.js
           grep -q "GRIND & WELD v2.5" /tmp/gw-game.js
           grep -q "GRIND & WELD v2.6" /tmp/gw-game.js
-          grep -q "Rust Cathedral" /tmp/gw-game.js
-          grep -q "Ashworks" /tmp/gw-game.js
-          grep -q "Black Rail Yard" /tmp/gw-game.js
+          grep -q "GRIND & WELD v2.7" /tmp/gw-game.js
+          grep -q "Iron Forge Citadel" /tmp/gw-game.js
+          grep -q "Scrap Runner" /tmp/gw-game.js
+          grep -q "Mastery" /tmp/gw-game.js
 
       - name: Install isolated Grind Weld source
         run: |
@@ -92,6 +94,6 @@ jobs:
       - name: Upload Grind Weld AIX
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGrindWeld-v2.6-multi-act-aix
+          name: GateCraftGrindWeld-v2.7-endgame-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
