@@ -1,8 +1,8 @@
-name: Build GRIND WELD WebGL AIX Canary
+name: Build GRIND WELD v2.7 Asset Payload Canary
 
 on:
   push:
-    branches: [ grind-weld-webgl-canary ]
+    branches: [ grind-weld-v27-asset-payload ]
   workflow_dispatch:
 
 permissions:
@@ -29,11 +29,11 @@ jobs:
       - name: Get MIT App Inventor extension template
         run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
 
-      - name: Build offline compressed Three.js payload
+      - name: Build compressed Three.js project asset
         run: |
           curl -L --fail --retry 3 https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.0/three.min.js -o /tmp/three.min.js
           python3 - <<'PY'
-          import gzip, base64, pathlib, textwrap
+          import gzip, pathlib
           root=pathlib.Path('grind_weld_extension')
           html=(root/'game/grind_weld_web.html').read_text(encoding='utf-8')
           game=(root/'game/grind_weld_v2.js').read_text(encoding='utf-8')
@@ -53,21 +53,11 @@ jobs:
           game=game.replace(marker, addons+'\n'+marker, 1)
           pathlib.Path('/tmp/gw-game.js').write_text(game,encoding='utf-8')
           three=pathlib.Path('/tmp/three.min.js').read_text(encoding='utf-8')
-          assert '/*__THREEJS__*/' in html
-          assert '/*__GAMEJS__*/' in html
+          assert '/*__THREEJS__*/' in html and '/*__GAMEJS__*/' in html
           final=html.replace('/*__THREEJS__*/', three).replace('/*__GAMEJS__*/', game)
           raw=gzip.compress(final.encode('utf-8'), compresslevel=9)
-          b64=base64.b64encode(raw).decode('ascii')
-          chunks=textwrap.wrap(b64,12000)
-          out=root/'src/com/gatecraft/grindweld/Payload.java'
-          out.parent.mkdir(parents=True,exist_ok=True)
-          with out.open('w',encoding='utf-8') as f:
-              f.write('package com.gatecraft.grindweld;\n')
-              f.write('import android.util.Base64;\nimport java.io.ByteArrayInputStream;\nimport java.io.ByteArrayOutputStream;\nimport java.util.zip.GZIPInputStream;\n')
-              f.write('final class Payload { private Payload(){} private static final String[] P={\n')
-              for c in chunks: f.write('"'+c+'",\n')
-              f.write('}; static String html(){ try { StringBuilder s=new StringBuilder(); for(String p:P)s.append(p); byte[] z=Base64.decode(s.toString(),Base64.DEFAULT); GZIPInputStream g=new GZIPInputStream(new ByteArrayInputStream(z)); ByteArrayOutputStream o=new ByteArrayOutputStream(2600000); byte[] b=new byte[8192]; int n; while((n=g.read(b))>0)o.write(b,0,n); g.close(); return new String(o.toByteArray(),"UTF-8"); }catch(Exception e){ return "<html><body style=\\"background:#111;color:white\\">GRIND & WELD payload error</body></html>"; }} }\n')
-          print('three',len(three.encode()),'game',len(game.encode()),'html',len(final.encode()),'gzip',len(raw),'chunks',len(chunks))
+          pathlib.Path('gatecraft_grindweld_payload.gz').write_bytes(raw)
+          print('three',len(three.encode()),'game',len(game.encode()),'html',len(final.encode()),'gzip',len(raw))
           PY
           node --check /tmp/gw-game.js
           grep -q "GRIND & WELD v2.5" /tmp/gw-game.js
@@ -78,23 +68,29 @@ jobs:
           grep -q "Black Rail Yard" /tmp/gw-game.js
           grep -q "Iron Citadel" /tmp/gw-game.js
 
-      - name: Install isolated Grind Weld source
+      - name: Install lightweight Grind Weld shell source
         run: |
+          rm -f grind_weld_extension/src/com/gatecraft/grindweld/Payload.java
           rm -rf buildenv/src/*
-          cp -R grind_weld_extension/src/* buildenv/src/
+          mkdir -p buildenv/src/com/gatecraft/grindweld
+          cp grind_weld_extension/src/com/gatecraft/grindweld/GateCraftGrindWeld.java buildenv/src/com/gatecraft/grindweld/
           find buildenv/src -type f -print
 
-      - name: Build GateCraftGrindWeld AIX
+      - name: Build GateCraftGrindWeld AIX shell
         run: |
           cd buildenv
           ant clean extensions
 
       - name: Show generated artifacts
-        run: find buildenv/out -maxdepth 2 -type f -print
+        run: |
+          find buildenv/out -maxdepth 2 -type f -print
+          ls -l gatecraft_grindweld_payload.gz
 
-      - name: Upload Grind Weld AIX
+      - name: Upload shell and payload asset
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGrindWeld-v2.7-iron-citadel-aix
-          path: buildenv/out/*.aix
+          name: GateCraftGrindWeld-v2.7-asset-payload-aix
+          path: |
+            buildenv/out/*.aix
+            gatecraft_grindweld_payload.gz
           if-no-files-found: error
