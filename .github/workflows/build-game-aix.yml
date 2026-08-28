@@ -1,8 +1,8 @@
-name: Build GateCraftGame Suite v3 AIX Canary
+name: Build GateCraftGame Suite v4 Arcade Reboot AIX Canary
 
 on:
   push:
-    branches: [ game-suite-v3-canary ]
+    branches: [ game-suite-v4-arcade-reboot ]
   workflow_dispatch:
 
 permissions:
@@ -29,13 +29,13 @@ jobs:
       - name: Get MIT App Inventor extension template
         run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
 
-      - name: Install isolated game-suite source
+      - name: Install isolated arcade source
         run: |
           rm -rf buildenv/src/*
           cp -R game_extension/src/* buildenv/src/
           find buildenv/src -type f -print
 
-      - name: Build GateCraftGame v3 AIX
+      - name: Build GateCraftGame v4 AIX
         run: |
           cd buildenv
           ant clean extensions
@@ -43,9 +43,9 @@ jobs:
       - name: Show generated artifacts
         run: find buildenv/out -maxdepth 2 -type f -print
 
-      - name: Upload GateCraftGame AIX
+      - name: Upload GateCraftGame v4 AIX
         uses: actions/upload-artifact@v4
         with:
-          name: GateCraftGame-v3.0-suite-aix
+          name: GateCraftGame-v4.0-arcade-reboot-aix
           path: buildenv/out/*.aix
           if-no-files-found: error
