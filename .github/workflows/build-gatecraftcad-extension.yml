@@ -1,0 +1,52 @@
+name: Build GateCraftCAD Extension
+
+on:
+  push:
+    branches:
+      - gatecraftcad-extension-v1
+    paths:
+      - 'extensions/GateCraftCAD/**'
+      - '.github/workflows/build-gatecraftcad-extension.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GateCraftCore
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Ant
+        run: sudo apt-get update && sudo apt-get install -y ant
+
+      - name: Clone MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git /tmp/extension-template
+
+      - name: Install GateCraftCAD source
+        run: |
+          rm -rf /tmp/extension-template/src/*
+          mkdir -p /tmp/extension-template/src/com/gatecraft/cad
+          cp extensions/GateCraftCAD/src/com/gatecraft/cad/GateCraftCAD.java /tmp/extension-template/src/com/gatecraft/cad/GateCraftCAD.java
+
+      - name: Build AIX
+        working-directory: /tmp/extension-template
+        run: ant extensions
+
+      - name: Collect AIX
+        run: |
+          mkdir -p dist
+          find /tmp/extension-template -type f -name '*.aix' -print -exec cp {} dist/ \;
+          test -n "$(find dist -type f -name '*.aix' -print -quit)"
+
+      - name: Upload AIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftCAD-aix
+          path: dist/*.aix
+          if-no-files-found: error
