@@ -1,0 +1,140 @@
+    Object x = jsonOrString(s);
+    if (!(x instanceof String)) return x;
+    JSONArray a = new JSONArray();
+    String[] lines = String.valueOf(x).replace("\r", "").split("\n");
+    for (String line : lines) if (line.trim().length() > 0) a.put(line.trim());
+    return a;
+  }
+
+  private static JSONArray flattenToArray(Object x) {
+    if (x instanceof JSONArray) return (JSONArray)x;
+    if (x instanceof JSONObject) {
+      JSONObject o = (JSONObject)x;
+      String[] keys = new String[]{"items","welds","list","parts","rows","data","source"};
+      for (String k : keys) { JSONArray a = o.optJSONArray(k); if (a != null) return a; }
+      JSONArray a = new JSONArray(); a.put(o); return a;
+    }
+    JSONArray a = new JSONArray(); if (x != null && x != JSONObject.NULL) a.put(String.valueOf(x)); return a;
+  }
+
+  private static JSONArray toArray(String json) throws JSONException {
+    String t = nvl(json, "[]").trim();
+    if (t.startsWith("[")) return new JSONArray(t);
+    JSONObject o = new JSONObject(t.length() == 0 ? "{}" : t);
+    String[] keys = new String[]{"items","parts","inventory","data"};
+    for (String k : keys) { JSONArray a = o.optJSONArray(k); if (a != null) return a; }
+    JSONArray a = new JSONArray(); a.put(o); return a;
+  }
+
+  private static double firstDouble(JSONObject o, String[] keys, double def) {
+    for (String k : keys) if (o.has(k)) {
+      double v = o.optDouble(k, Double.NaN); if (!Double.isNaN(v)) return v;
+    }
+    return def;
+  }
+
+  private static int countSubstring(String s, String find) {
+    if (s == null || find.length() == 0) return 0;
+    int c = 0, p = 0; while ((p = s.indexOf(find, p)) >= 0) { c++; p += find.length(); } return c;
+  }
+
+  private static class CutPiece {
+    String id, profile; double lengthMm; int qty;
+    CutPiece(String id, String profile, double lengthMm, int qty) { this.id=id; this.profile=profile; this.lengthMm=lengthMm; this.qty=qty; }
+  }
+  private static class Bar {
+    String id; double lengthMm, usedMm; boolean inventory; List<CutPiece> pieces = new ArrayList<CutPiece>();
+    Bar(String id,double lengthMm,boolean inventory){this.id=id;this.lengthMm=lengthMm;this.inventory=inventory;}
+  }
+
+  private static List<CutPiece> extractCutPieces(String s) {
+    List<CutPiece> out = new ArrayList<CutPiece>();
+    if (s == null) return out;
+    try {
+      Object root = jsonOrString(s);
+      collectCutPieces(root, out);
+      if (!out.isEmpty()) return out;
+    } catch (Throwable ignored) {}
+    String[] lines = s.replace("\r","").split("\n");
+    for (int row=0; row<lines.length; row++) {
+      String line=lines[row].trim(); if(line.length()==0) continue;
+      String[] p=line.split("[,;\\t]");
+      double len=0; int lenIndex=-1;
+      for(int k=0;k<p.length;k++) try { double v=Double.parseDouble(p[k].replace("mm","").trim()); if(v>0){len=v;lenIndex=k;break;} } catch(Throwable ignored){}
+      if(len>0){String profile=p.length>0?p[0].trim():"UNSPECIFIED";out.add(new CutPiece("R"+(row+1),profile,len,1));}
+    }
+    return out;
+  }
+
+  private static void collectCutPieces(Object root, List<CutPiece> out) {
+    if (root instanceof JSONArray) {
+      JSONArray a=(JSONArray)root; for(int k=0;k<a.length();k++) collectCutPieces(a.opt(k),out); return;
+    }
+    if (!(root instanceof JSONObject)) return;
+    JSONObject o=(JSONObject)root;
+    double len=firstDouble(o,new String[]{"cutLengthMm","lengthMm","length_mm","length"},0);
+    if(len>0){
+      String profile=o.optString("profile",o.optString("profileName",o.optString("material","UNSPECIFIED")));
+      String id=o.optString("objectId",o.optString("id",o.optString("part_code","P"+(out.size()+1))));
+      int qty=Math.max(1,o.optInt("quantity",o.optInt("qty",1)));
+      out.add(new CutPiece(id,profile,len,qty));
+    }
+    Iterator<String> it=o.keys();
+    while(it.hasNext()){
+      String k=it.next(); Object v=o.opt(k);
+      if(v instanceof JSONObject || v instanceof JSONArray) collectCutPieces(v,out);
+    }
+  }
+
+  private static class NestPart { String id; double w,h; boolean unplaced; NestPart(String i,double w,double h){id=i;this.w=w;this.h=h;} }
+  private static class Placement { String id; double x,y,w,h; boolean rotated; Placement(String id,double x,double y,double w,double h,boolean r){this.id=id;this.x=x;this.y=y;this.w=w;this.h=h;rotated=r;} }
+  private static class Shelf { double y,height,x; Shelf(double y,double h){this.y=y;height=h;} }
+  private static class Sheet {
+    int no; double w,h,nextY; List<Shelf>shelves=new ArrayList<Shelf>(); List<Placement>placements=new ArrayList<Placement>();
+    Sheet(int n,double w,double h){no=n;this.w=w;this.h=h;}
+    Placement place(NestPart p,double gap,boolean rotate){
+      Placement a=tryPlace(p.w,p.h,p.id,gap,false); if(a!=null)return a;
+      if(rotate && Math.abs(p.w-p.h)>1e-7) return tryPlace(p.h,p.w,p.id,gap,true);
+      return null;
+    }
+    Placement tryPlace(double pw,double ph,String id,double gap,boolean rot){
+      for(Shelf s:shelves){
+        if(ph<=s.height+1e-7 && s.x+pw<=w+1e-7){Placement p=new Placement(id,s.x,s.y,pw,ph,rot);s.x+=pw+gap;placements.add(p);return p;}
+      }
+      if(nextY+ph<=h+1e-7){Shelf s=new Shelf(nextY,ph);shelves.add(s);Placement p=new Placement(id,0,nextY,pw,ph,rot);s.x=pw+gap;nextY+=ph+gap;placements.add(p);return p;}
+      return null;
+    }
+  }
+
+  private static class MassAccumulator { double mass,mx,my,mz; int count; }
+  private static void accumulateMass(Object root, MassAccumulator a) {
+    if(root instanceof JSONArray){JSONArray j=(JSONArray)root;for(int k=0;k<j.length();k++)accumulateMass(j.opt(k),a);return;}
+    if(!(root instanceof JSONObject)){
+      if(root instanceof String){
+        Matcher m=Pattern.compile("(?i)(estimatedMassKg|massKg|mass|weightKg)\\s*[:=]\\s*([0-9]+(?:\\.[0-9]+)?)").matcher((String)root);
+        while(m.find()){double q=Double.parseDouble(m.group(2));a.mass+=q;a.count++;}
+      }
+      return;
+    }
+    JSONObject o=(JSONObject)root;
+    double m=firstDouble(o,new String[]{"estimatedMassKg","massKg","mass_kg","objectMass","mass","weightKg","weight"},0);
+    if(m>0){double x=firstDouble(o,new String[]{"centerX","x","xMm","cx"},0);double y=firstDouble(o,new String[]{"centerY","y","yMm","cy"},0);double z=firstDouble(o,new String[]{"centerZ","z","zMm","cz","elevationMm"},0);a.mass+=m;a.mx+=m*x;a.my+=m*y;a.mz+=m*z;a.count++;}
+    Iterator<String>it=o.keys();while(it.hasNext()){Object v=o.opt(it.next());if(v instanceof JSONObject||v instanceof JSONArray)accumulateMass(v,a);}
+  }
+
+  private static JSONObject findFirstCollision(Object root) throws JSONException {
+    if(root instanceof JSONArray){JSONArray a=(JSONArray)root;for(int k=0;k<a.length();k++){JSONObject r=findFirstCollision(a.opt(k));if(r!=null)return r;}return null;}
+    if(!(root instanceof JSONObject))return null;
+    JSONObject o=(JSONObject)root;
+    boolean hit=o.optBoolean("collision",false)||o.optBoolean("hit",false)||o.optBoolean("intersects",false)||"COLLISION".equalsIgnoreCase(o.optString("status",""));
+    if(hit)return o;
+    Iterator<String>it=o.keys();while(it.hasNext()){Object v=o.opt(it.next());if(v instanceof JSONObject||v instanceof JSONArray){JSONObject r=findFirstCollision(v);if(r!=null)return r;}}
+    return null;
+  }
+
+  private JSONObject findHardware(String id) throws JSONException {
+    JSONArray a=new JSONObject(gc35HardwareCatalog).optJSONArray("items"); if(a==null)return null;
+    for(int k=0;k<a.length();k++){JSONObject o=a.optJSONObject(k);if(o!=null&&id.equalsIgnoreCase(o.optString("id","")))return o;}
+    return null;
+  }
+}
