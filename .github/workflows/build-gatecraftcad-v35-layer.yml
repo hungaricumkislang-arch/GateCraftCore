@@ -1,0 +1,86 @@
+name: Build GateCraftCAD v35 Layer
+
+on:
+  push:
+    branches: [ gatecraftcad-v35 ]
+    paths:
+      - 'gatecraftcad_v35/**'
+      - '.github/workflows/build-gatecraftcad-v35-layer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Assemble v35 source
+        run: |
+          set -euxo pipefail
+          mkdir -p work/src/com/gatecraft/cad work/src/com/google/appinventor/components/runtime work/classes work/out
+          cat gatecraftcad_v35/srcparts/GateCraftCAD.java.part* > work/src/com/gatecraft/cad/GateCraftCAD.java
+          cp gatecraftcad_v35/src/GateCraftCA0.java work/src/com/gatecraft/cad/GateCraftCA0.java
+          cat > work/src/com/google/appinventor/components/runtime/ComponentContainer.java <<'EOF'
+          package com.google.appinventor.components.runtime;
+          public interface ComponentContainer {}
+          EOF
+          wc -c work/src/com/gatecraft/cad/GateCraftCAD.java
+
+      - name: Locate Android SDK
+        run: |
+          set -euxo pipefail
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          PLATFORM=$(find "$ANDROID_HOME/platforms" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          echo "BT=$BT" >> "$GITHUB_ENV"
+          echo "ANDROID_JAR=$PLATFORM/android.jar" >> "$GITHUB_ENV"
+          test -x "$BT/d8"
+          test -f "$BT/lib/d8.jar"
+          test -f "$PLATFORM/android.jar"
+
+      - name: Compile compatibility layer
+        run: |
+          set -euxo pipefail
+          javac -source 8 -target 8 -cp "$ANDROID_JAR" -d work/classes \
+            work/src/com/google/appinventor/components/runtime/ComponentContainer.java \
+            work/src/com/gatecraft/cad/GateCraftCA0.java \
+            work/src/com/gatecraft/cad/GateCraftCAD.java
+          find work/classes -type f -name '*.class' -print
+
+      - name: Build compile-only stub jar
+        run: |
+          set -euxo pipefail
+          mkdir -p work/stubjar
+          cp -r work/classes/com/google work/stubjar/com/
+          mkdir -p work/stubjar/com/gatecraft/cad
+          cp work/classes/com/gatecraft/cad/GateCraftCA0.class work/stubjar/com/gatecraft/cad/
+          (cd work/stubjar && jar cf ../compile-stubs.jar .)
+
+      - name: D8 only the new GateCraftCAD v35 class tree
+        run: |
+          set -euxo pipefail
+          mkdir -p work/newclasses/com/gatecraft/cad work/dexout
+          cp work/classes/com/gatecraft/cad/GateCraftCAD*.class work/newclasses/com/gatecraft/cad/
+          (cd work/newclasses && jar cf ../GateCraftCAD-v35-layer-classes.jar .)
+          "$BT/d8" --min-api 21 --lib "$ANDROID_JAR" --lib work/compile-stubs.jar \
+            --output work/dexout work/GateCraftCAD-v35-layer-classes.jar
+          cp work/dexout/classes.dex work/out/GateCraftCAD_v35_layer.dex
+          cp work/GateCraftCAD-v35-layer-classes.jar work/out/GateCraftCAD_v35_layer_classes.jar
+          cp "$BT/lib/d8.jar" work/out/d8.jar
+          sha256sum work/out/* > work/out/SHA256SUMS.txt
+          ls -lh work/out
+
+      - name: Upload build layer
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftCAD-v35-layer
+          path: work/out/*
+          if-no-files-found: error
