@@ -6,6 +6,11 @@ on:
     paths:
       - 'gatecraftcad_v35/**'
       - '.github/workflows/build-gatecraftcad-v35-layer.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'gatecraftcad_v35/**'
+      - '.github/workflows/build-gatecraftcad-v35-layer.yml'
   workflow_dispatch:
 
 permissions:
@@ -58,9 +63,8 @@ jobs:
       - name: Build compile-only stub jar
         run: |
           set -euxo pipefail
-          mkdir -p work/stubjar
-          cp -r work/classes/com/google work/stubjar/com/
-          mkdir -p work/stubjar/com/gatecraft/cad
+          mkdir -p work/stubjar/com/gatecraft/cad work/stubjar/com/google/appinventor/components/runtime
+          cp work/classes/com/google/appinventor/components/runtime/ComponentContainer.class work/stubjar/com/google/appinventor/components/runtime/
           cp work/classes/com/gatecraft/cad/GateCraftCA0.class work/stubjar/com/gatecraft/cad/
           (cd work/stubjar && jar cf ../compile-stubs.jar .)
 
