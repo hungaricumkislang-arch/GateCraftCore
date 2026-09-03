@@ -1,0 +1,185 @@
+int idx = 0; idx < lines.length; idx++) {
+      String code = lines[idx];
+      String val = idx + 1 < lines.length ? lines[idx + 1] : "";
+      if ("0".equals(code.trim())) entity = val.trim().toUpperCase(Locale.US);
+      if ("8".equals(code.trim()) && idx + 1 < lines.length) {
+        String old = lines[idx + 1].trim().toUpperCase(Locale.US);
+        String layer;
+        if (old.contains("BEND_DOWN")) layer = "GC_BEND_DOWN";
+        else if (old.contains("BEND")) layer = "GC_BEND_UP";
+        else if (old.contains("WELD")) layer = "GC_WELD";
+        else if (old.contains("HIDDEN")) layer = "GC_HIDDEN";
+        else if (old.contains("CENTER")) layer = "GC_CENTER";
+        else if (old.contains("SLOT")) layer = "GC_SLOT";
+        else if ("CIRCLE".equals(entity)) layer = "GC_HOLE";
+        else if ("TEXT".equals(entity) || "MTEXT".equals(entity)) layer = "GC_ENGRAVE";
+        else if ("DIMENSION".equals(entity)) layer = "GC_DIM";
+        else layer = "GC_CUT";
+        b.append(code).append('\n').append(layer).append('\n');
+        idx++;
+      } else {
+        b.append(code).append('\n');
+      }
+    }
+    return b.toString();
+  }
+
+  // -------------------------------------------------------------------------
+  // Hole patterns
+  // -------------------------------------------------------------------------
+
+  public String CreateRectHolePattern(double centerX, double centerY, double z, double rows, double columns, double spacingX, double spacingY, double diameter, double depth) {
+    JSONObject out = new JSONObject();
+    try {
+      int r = Math.max(1, (int)Math.round(rows)), c = Math.max(1, (int)Math.round(columns));
+      double sx = Math.max(0, spacingX), sy = Math.max(0, spacingY);
+      int count = 0;
+      for (int iy = 0; iy < r; iy++) {
+        for (int ix = 0; ix < c; ix++) {
+          double x = centerX + (ix - (c - 1) / 2.0) * sx;
+          double y = centerY + (iy - (r - 1) / 2.0) * sy;
+          AddSelectedHole3D(x, y, z, positive(diameter, 10), positive(depth, 100));
+          count++;
+        }
+      }
+      out.put("ok", true); out.put("count", count); out.put("pattern", "RECT");
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String CreateCircularHolePattern(double centerX, double centerY, double z, double radius, double count, double diameter, double depth, double startAngleDeg) {
+    JSONObject out = new JSONObject();
+    try {
+      int n = Math.max(1, (int)Math.round(count));
+      double rr = Math.max(0, radius);
+      for (int k = 0; k < n; k++) {
+        double a = Math.toRadians(startAngleDeg + 360.0 * k / n);
+        AddSelectedHole3D(centerX + rr * Math.cos(a), centerY + rr * Math.sin(a), z, positive(diameter, 10), positive(depth, 100));
+      }
+      out.put("ok", true); out.put("count", n); out.put("pattern", "CIRCULAR");
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  // -------------------------------------------------------------------------
+  // Welding
+  // -------------------------------------------------------------------------
+
+  public String WeldListJson() {
+    JSONObject out = new JSONObject();
+    try {
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.weldlist.v35");
+      out.put("source", jsonOrLines(WeldingAssemblyList()));
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String GenerateWeldSequenceJson() {
+    JSONObject out = new JSONObject();
+    try {
+      JSONArray welds = flattenToArray(jsonOrLines(WeldingAssemblyList()));
+      List<JSONObject> list = new ArrayList<JSONObject>();
+      for (int k = 0; k < welds.length(); k++) {
+        Object x = welds.opt(k);
+        JSONObject o = x instanceof JSONObject ? (JSONObject) x : new JSONObject().put("label", String.valueOf(x));
+        o.put("_index", k);
+        list.add(o);
+      }
+      Collections.sort(list, new Comparator<JSONObject>() {
+        public int compare(JSONObject a, JSONObject b) {
+          double la = firstDouble(a, new String[]{"lengthMm","length","weldLengthMm"}, 0);
+          double lb = firstDouble(b, new String[]{"lengthMm","length","weldLengthMm"}, 0);
+          return Double.compare(lb, la);
+        }
+      });
+      JSONArray seq = new JSONArray();
+      int left = 0, right = list.size() - 1, step = 1;
+      boolean takeLong = true;
+      while (left <= right) {
+        JSONObject src = takeLong ? list.get(left++) : list.get(right--);
+        JSONObject q = new JSONObject();
+        q.put("step", step++);
+        q.put("weld", src);
+        q.put("rule", takeLong ? "alternate_long" : "alternate_short");
+        seq.put(q);
+        takeLong = !takeLong;
+      }
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.weldsequence.v35");
+      out.put("sequence", seq);
+      out.put("note", "Rule-based alternating sequence; not FEA.");
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String WeldDistortionRiskJson() {
+    JSONObject out = new JSONObject();
+    try {
+      JSONArray w = flattenToArray(jsonOrLines(WeldingAssemblyList()));
+      double total = 0, longest = 0;
+      for (int k = 0; k < w.length(); k++) {
+        Object x = w.opt(k);
+        if (x instanceof JSONObject) {
+          double len = firstDouble((JSONObject)x, new String[]{"lengthMm","length","weldLengthMm"}, 0);
+          total += len; longest = Math.max(longest, len);
+        }
+      }
+      String risk = longest > 1200 || total > 6000 ? "HIGH" : (longest > 600 || total > 3000 ? "MEDIUM" : "LOW");
+      out.put("ok", true); out.put("risk", risk); out.put("totalWeldLengthMm", round3(total)); out.put("longestWeldMm", round3(longest));
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  // -------------------------------------------------------------------------
+  // Mass / center of gravity
+  // -------------------------------------------------------------------------
+
+  public String MassPropertiesJson() {
+    JSONObject out = new JSONObject();
+    try {
+      Object root = jsonOrString(PartsAssemblyJson());
+      MassAccumulator a = new MassAccumulator();
+      accumulateMass(root, a);
+      if (a.mass <= 0) {
+        Object report = jsonOrString(ProjectReport());
+        accumulateMass(report, a);
+      }
+      out.put("ok", a.mass > 0);
+      out.put("schema", "gatecraft.cad.massproperties.v35");
+      out.put("massKg", round3(a.mass));
+      out.put("centerOfGravityX", a.mass > 0 ? round3(a.mx / a.mass) : JSONObject.NULL);
+      out.put("centerOfGravityY", a.mass > 0 ? round3(a.my / a.mass) : JSONObject.NULL);
+      out.put("centerOfGravityZ", a.mass > 0 ? round3(a.mz / a.mass) : JSONObject.NULL);
+      out.put("contributingParts", a.count);
+      if (a.mass <= 0) out.put("warning", "No mass-bearing fields were exposed by the current assembly payload.");
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  // -------------------------------------------------------------------------
+  // Motion collision normalization
+  // -------------------------------------------------------------------------
+
+  public String MotionCollisionJson(double steps) {
+    JSONObject out = new JSONObject();
+    try {
+      Object sim = jsonOrString(GateMotionSimulationJson(Math.max(2, steps)));
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.motioncollision.v35");
+      out.put("simulation", sim);
+      JSONObject first = findFirstCollision(sim);
+      out.put("firstCollision", first == null ? JSONObject.NULL : first);
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String FirstCollisionPosition(double steps) {
+    try {
+      JSONObject m = new JSONObject(MotionCollisionJson(steps));
+      Object x = m.opt("firstCollision");
+      return x == null ? "null" : String.valueOf(x);
+    } catch (Throwable t) { return errorJson(t); }
+  }
+
+  // ---------------------------------------
