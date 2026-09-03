@@ -1,0 +1,218 @@
+lengthMm", d(iv, "length", defaultStock)), defaultStock);
+          bars.add(new Bar(iv.optString("id", "INV_" + (k + 1)), len, true));
+        }
+      }
+
+      int newNo = 1;
+      for (CutPiece pc : g) {
+        totalRequired += pc.lengthMm;
+        Bar best = null;
+        double bestRemain = Double.MAX_VALUE;
+        for (Bar b : bars) {
+          double need = pc.lengthMm + (b.pieces.size() > 0 ? kerf : 0);
+          double rem = b.lengthMm - b.usedMm;
+          if (rem + 1e-7 >= need && rem - need < bestRemain) {
+            best = b; bestRemain = rem - need;
+          }
+        }
+        if (best == null) {
+          double len = Math.max(defaultStock, pc.lengthMm);
+          best = new Bar("NEW_" + en.getKey() + "_" + newNo++, len, false);
+          bars.add(best);
+          totalPurchased += len;
+        }
+        if (best.pieces.size() > 0) best.usedMm += kerf;
+        best.pieces.add(pc);
+        best.usedMm += pc.lengthMm;
+      }
+
+      JSONObject pr = new JSONObject();
+      pr.put("profile", en.getKey());
+      JSONArray ja = new JSONArray();
+      for (Bar b : bars) {
+        if (b.pieces.isEmpty()) continue;
+        JSONObject jb = new JSONObject();
+        jb.put("id", b.id);
+        jb.put("inventory", b.inventory);
+        jb.put("stockLengthMm", round3(b.lengthMm));
+        jb.put("usedMm", round3(b.usedMm));
+        jb.put("wasteMm", round3(Math.max(0, b.lengthMm - b.usedMm)));
+        JSONArray jp = new JSONArray();
+        for (CutPiece p : b.pieces) {
+          JSONObject x = new JSONObject();
+          x.put("id", p.id);
+          x.put("lengthMm", round3(p.lengthMm));
+          jp.put(x);
+        }
+        jb.put("pieces", jp);
+        ja.put(jb);
+      }
+      pr.put("bars", ja);
+      profiles.put(pr);
+    }
+
+    JSONObject r = new JSONObject();
+    r.put("profiles", profiles);
+    r.put("requiredLengthMm", round3(totalRequired));
+    r.put("newStockLengthMm", round3(totalPurchased));
+    return r;
+  }
+
+  // -------------------------------------------------------------------------
+  // 2D nesting
+  // -------------------------------------------------------------------------
+
+  public String NestPartsJson(String partsJson, double sheetWidthMm, double sheetHeightMm, double spacingMm, boolean allowRotate) {
+    JSONObject out = new JSONObject();
+    try {
+      JSONArray parts = toArray(partsJson);
+      JSONObject n = nest(parts, positive(sheetWidthMm, 3000), positive(sheetHeightMm, 1500), Math.max(0, spacingMm), allowRotate);
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.nesting.v35");
+      out.put("result", n);
+      gc35LastNesting = out.toString();
+    } catch (Throwable t) {
+      putError(out, t);
+    }
+    return out.toString();
+  }
+
+  public String NestFlatPatternsJson(double sheetWidthMm, double sheetHeightMm, double spacingMm, boolean allowRotate) {
+    JSONObject out = new JSONObject();
+    try {
+      JSONArray parts = new JSONArray();
+      Object flat = jsonOrString(SelectedFlatPatternJson());
+      if (flat instanceof JSONObject) {
+        JSONObject f = (JSONObject) flat;
+        double w = firstDouble(f, new String[]{"widthMm","flatWidthMm","width","w"}, 0);
+        double h = firstDouble(f, new String[]{"heightMm","flatHeightMm","height","h"}, 0);
+        if (w > 0 && h > 0) {
+          JSONObject p = new JSONObject();
+          p.put("id", "SELECTED_FLAT");
+          p.put("widthMm", w);
+          p.put("heightMm", h);
+          p.put("count", 1);
+          parts.put(p);
+        }
+      }
+      if (parts.length() == 0) {
+        out.put("ok", false);
+        out.put("error", "flat_pattern_dimensions_not_available");
+      } else {
+        JSONObject n = nest(parts, positive(sheetWidthMm, 3000), positive(sheetHeightMm, 1500), Math.max(0, spacingMm), allowRotate);
+        out.put("ok", true);
+        out.put("schema", "gatecraft.cad.flat.nesting.v35");
+        out.put("result", n);
+        gc35LastNesting = out.toString();
+      }
+    } catch (Throwable t) {
+      putError(out, t);
+    }
+    return out.toString();
+  }
+
+  public String NestingResultJson() {
+    return gc35LastNesting;
+  }
+
+  private JSONObject nest(JSONArray input, double sw, double sh, double gap, boolean rotate) throws JSONException {
+    List<NestPart> items = new ArrayList<NestPart>();
+    for (int a = 0; a < input.length(); a++) {
+      JSONObject p = input.optJSONObject(a);
+      if (p == null) continue;
+      double w = firstDouble(p, new String[]{"widthMm","flatWidthMm","width","w"}, 0);
+      double h = firstDouble(p, new String[]{"heightMm","flatHeightMm","height","h"}, 0);
+      int c = Math.max(1, i(p, "count", i(p, "qty", 1)));
+      String id = p.optString("id", p.optString("name", "P" + (a + 1)));
+      if (w <= 0 || h <= 0) continue;
+      for (int q = 0; q < c; q++) items.add(new NestPart(id + (c > 1 ? "_" + (q + 1) : ""), w, h));
+    }
+    Collections.sort(items, new Comparator<NestPart>() {
+      public int compare(NestPart a, NestPart b) { return Double.compare(Math.max(b.w,b.h), Math.max(a.w,a.h)); }
+    });
+
+    List<Sheet> sheets = new ArrayList<Sheet>();
+    for (NestPart p : items) {
+      Placement placed = null;
+      for (Sheet s : sheets) {
+        placed = s.place(p, gap, rotate);
+        if (placed != null) break;
+      }
+      if (placed == null) {
+        Sheet s = new Sheet(sheets.size() + 1, sw, sh);
+        sheets.add(s);
+        placed = s.place(p, gap, rotate);
+        if (placed == null) {
+          p.unplaced = true;
+        }
+      }
+    }
+
+    JSONArray js = new JSONArray();
+    double usedArea = 0;
+    for (Sheet s : sheets) {
+      JSONObject x = new JSONObject();
+      x.put("sheet", s.no);
+      x.put("widthMm", sw);
+      x.put("heightMm", sh);
+      JSONArray ps = new JSONArray();
+      for (Placement p : s.placements) {
+        JSONObject q = new JSONObject();
+        q.put("id", p.id);
+        q.put("xMm", round3(p.x)); q.put("yMm", round3(p.y));
+        q.put("widthMm", round3(p.w)); q.put("heightMm", round3(p.h));
+        q.put("rotated", p.rotated);
+        usedArea += p.w * p.h;
+        ps.put(q);
+      }
+      x.put("placements", ps);
+      js.put(x);
+    }
+    JSONArray un = new JSONArray();
+    for (NestPart p : items) if (p.unplaced) un.put(p.id);
+
+    JSONObject r = new JSONObject();
+    r.put("sheets", js);
+    r.put("sheetCount", sheets.size());
+    r.put("usedAreaMm2", round3(usedArea));
+    r.put("sheetAreaMm2", round3(sheets.size() * sw * sh));
+    r.put("utilizationPercent", sheets.size() == 0 ? 0 : round3(100.0 * usedArea / (sheets.size() * sw * sh)));
+    r.put("unplaced", un);
+    return r;
+  }
+
+  // -------------------------------------------------------------------------
+  // CNC DXF
+  // -------------------------------------------------------------------------
+
+  public String ExportManufacturingDxf() {
+    return remapDxfLayers(ExportDxf());
+  }
+
+  public String ExportFlatPatternDxf() {
+    // v34 keeps the flat pattern as 2D source geometry; the generic DXF export
+    // is therefore suitable after manufacturing layer normalization.
+    return remapDxfLayers(ExportDxf());
+  }
+
+  public String ManufacturingDxfAuditJson() {
+    JSONObject out = new JSONObject();
+    try {
+      String dxf = ExportManufacturingDxf();
+      String[] names = new String[]{"GC_CUT","GC_BEND_UP","GC_BEND_DOWN","GC_HOLE","GC_SLOT","GC_ENGRAVE","GC_CENTER","GC_HIDDEN","GC_WELD","GC_DIM"};
+      JSONObject counts = new JSONObject();
+      for (String n : names) counts.put(n, countSubstring(dxf, "\n" + n + "\n"));
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.cnc.dxf.audit.v35");
+      out.put("layers", counts);
+      out.put("bytes", dxf.length());
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  private String remapDxfLayers(String src) {
+    if (src == null) return "";
+    String[] lines = src.replace("\r", "").split("\n", -1);
+    StringBuilder b = new StringBuilder(src.length() + 512);
+    String entity = "";
+    for (
