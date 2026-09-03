@@ -1,0 +1,177 @@
+----------------------------------
+  // Hardware JSON catalog
+  // -------------------------------------------------------------------------
+
+  public String LoadHardwareCatalogJson(String json) {
+    JSONObject out = new JSONObject();
+    try {
+      JSONArray a = toArray(json);
+      JSONObject root = new JSONObject(); root.put("items", a);
+      gc35HardwareCatalog = root.toString();
+      out.put("ok", true); out.put("count", a.length());
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String HardwareCatalogV35Json() {
+    JSONObject out = new JSONObject();
+    try {
+      out.put("builtin", jsonOrString(HardwareCatalogJson()));
+      out.put("custom", new JSONObject(gc35HardwareCatalog));
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String InsertHardwareById(String id, double x, double y, double z) {
+    JSONObject out = new JSONObject();
+    try {
+      JSONObject item = findHardware(id);
+      if (item == null) {
+        out.put("ok", false); out.put("error", "hardware_not_found"); out.put("id", id);
+      } else {
+        AddHardware3D(item.optString("kind", item.optString("type", "HARDWARE")), x, y, z,
+            positive(d(item,"width",40),40), positive(d(item,"height",40),40), positive(d(item,"depth",20),20), item.toString());
+        out.put("ok", true); out.put("id", id);
+      }
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String AutoFitHardwareById(String id) {
+    JSONObject out = new JSONObject();
+    try {
+      JSONObject item = findHardware(id);
+      if (item == null) { out.put("ok", false); out.put("error", "hardware_not_found"); }
+      else { AutoFitSelectedGateHardware(item.toString()); out.put("ok", true); out.put("id", id); }
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  // -------------------------------------------------------------------------
+  // Revisions
+  // -------------------------------------------------------------------------
+
+  public String SnapshotRevision(String name) {
+    JSONObject out = new JSONObject();
+    try {
+      String n = nvl(name, "").trim(); if (n.length() == 0) n = "REV_" + (gc35Revisions.size() + 1);
+      JSONObject r = new JSONObject();
+      r.put("name", n);
+      r.put("model", SaveJson());
+      r.put("assembly", PartsAssemblyJson());
+      r.put("cutList", ManufacturingCutListJson());
+      r.put("weldList", WeldingAssemblyList());
+      r.put("projectReport", ProjectReport());
+      gc35Revisions.put(n, r);
+      out.put("ok", true); out.put("name", n); out.put("count", gc35Revisions.size());
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String RevisionListJson() {
+    JSONArray a = new JSONArray();
+    for (String n : gc35Revisions.keySet()) a.put(n);
+    return a.toString();
+  }
+
+  public String CompareRevision(String nameA, String nameB) {
+    JSONObject out = new JSONObject();
+    try {
+      JSONObject a = gc35Revisions.get(nameA), b = gc35Revisions.get(nameB);
+      if (a == null || b == null) {
+        out.put("ok", false); out.put("error", "revision_not_found");
+      } else {
+        out.put("ok", true); out.put("a", nameA); out.put("b", nameB);
+        out.put("modelChanged", !a.optString("model").equals(b.optString("model")));
+        out.put("assemblyChanged", !a.optString("assembly").equals(b.optString("assembly")));
+        out.put("cutListChanged", !a.optString("cutList").equals(b.optString("cutList")));
+        out.put("weldListChanged", !a.optString("weldList").equals(b.optString("weldList")));
+        out.put("modelLengthDelta", b.optString("model").length() - a.optString("model").length());
+        out.put("cutListLengthDelta", b.optString("cutList").length() - a.optString("cutList").length());
+      }
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String RevisionDiffJson(String nameA, String nameB) {
+    return CompareRevision(nameA, nameB);
+  }
+
+  // -------------------------------------------------------------------------
+  // Assembly tree / manufacturing package
+  // -------------------------------------------------------------------------
+
+  public String AssemblyTreeJson() {
+    JSONObject out = new JSONObject();
+    try {
+      Object a = jsonOrString(PartsAssemblyJson());
+      out.put("ok", true); out.put("schema", "gatecraft.cad.assemblytree.v35"); out.put("tree", a);
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String GenerateManufacturingPackageJson() {
+    JSONObject out = new JSONObject();
+    try {
+      out.put("schema", "gatecraft.cad.manufacturing.package.v35");
+      out.put("assembly", jsonOrString(PartsAssemblyJson()));
+      out.put("workshop", jsonOrString(ExportWorkshopPackageJson("A4", false, "[]")));
+      out.put("bomCsv", ExportBomCsv());
+      out.put("cutList", jsonOrString(ManufacturingCutListJson()));
+      out.put("weldList", jsonOrLines(WeldingAssemblyList()));
+      out.put("stockOptimization", jsonOrString(OptimizeAllProfilesJson(6000, 2)));
+      out.put("massProperties", new JSONObject(MassPropertiesJson()));
+      out.put("motionCollision", new JSONObject(MotionCollisionJson(36)));
+      out.put("cncDxfAudit", new JSONObject(ManufacturingDxfAuditJson()));
+      out.put("manufacturingRules", jsonOrString(ManufacturingRulesJson()));
+      out.put("installation", jsonOrString(InstallationPlanJson()));
+      out.put("ok", true);
+      gc35LastManufacturingPackage = out.toString();
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  public String ManufacturingPackageV35Json() {
+    return gc35LastManufacturingPackage;
+  }
+
+  public String GateCraftV35ValidationJson() {
+    JSONObject out = new JSONObject();
+    try {
+      out.put("version", 35);
+      out.put("base", "GateCraftCAD v34 FULL 12-point");
+      out.put("compatibility", "inherits v34 public API unchanged");
+      JSONArray caps = new JSONArray();
+      String[] c = new String[]{"gate_generator","stock_optimizer","nesting","cnc_dxf_layers","hole_patterns","weld_sequence","mass_cog","motion_collision","hardware_json_catalog","revision_diff","assembly_tree","manufacturing_package"};
+      for (String x : c) caps.put(x);
+      out.put("capabilities", caps);
+      out.put("v34CompatibilitySelfTest", jsonOrString(CompatibilitySelfTest()));
+      out.put("v34Validation", jsonOrString(GateCraftV34ValidationJson()));
+    } catch (Throwable t) { putError(out, t); }
+    return out.toString();
+  }
+
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
+
+  private static String nvl(String s, String d) { return s == null ? d : s; }
+  private static String upper(String s) { return nvl(s, "").trim().toUpperCase(Locale.US); }
+  private static double positive(double v, double d) { return v > 0 ? v : d; }
+  private static double d(JSONObject o, String k, double def) { return o == null ? def : o.optDouble(k, def); }
+  private static int i(JSONObject o, String k, int def) { return o == null ? def : o.optInt(k, def); }
+  private static double round3(double x) { return Math.rint(x * 1000.0) / 1000.0; }
+
+  private static void putError(JSONObject o, Throwable t) {
+    try { o.put("ok", false); o.put("error", t.getClass().getSimpleName()); o.put("message", String.valueOf(t.getMessage())); } catch (Throwable ignored) {}
+  }
+  private static String errorJson(Throwable t) { JSONObject o = new JSONObject(); putError(o,t); return o.toString(); }
+
+  private static Object jsonOrString(String s) {
+    if (s == null) return JSONObject.NULL;
+    String t = s.trim();
+    try { if (t.startsWith("{")) return new JSONObject(t); if (t.startsWith("[")) return new JSONArray(t); } catch (Throwable ignored) {}
+    return s;
+  }
+
+  private static Object jsonOrLines(String s) {
