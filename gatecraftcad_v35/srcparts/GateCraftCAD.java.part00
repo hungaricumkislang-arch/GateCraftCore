@@ -1,0 +1,205 @@
+package com.gatecraft.cad;
+
+import com.google.appinventor.components.runtime.ComponentContainer;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONException;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * GateCraftCAD v35 compatibility layer.
+ *
+ * The complete v34 engine lives in GateCraftCA0 (renamed byte-for-byte from the
+ * v34 GateCraftCAD class at build time).  This class only adds manufacturing
+ * orchestration features and inherits all 214 v34 public methods unchanged.
+ */
+public class GateCraftCAD extends GateCraftCA0 {
+  private String gc35HardwareCatalog = "{\"items\":[]}";
+  private final LinkedHashMap<String, JSONObject> gc35Revisions = new LinkedHashMap<String, JSONObject>();
+  private String gc35LastStock = "{}";
+  private String gc35LastNesting = "{}";
+  private String gc35LastManufacturingPackage = "{}";
+
+  public GateCraftCAD(ComponentContainer container) {
+    super(container);
+  }
+
+  // -------------------------------------------------------------------------
+  // Gate generator
+  // -------------------------------------------------------------------------
+
+  public String GenerateGateFromJson(String specJson) {
+    JSONObject out = new JSONObject();
+    try {
+      JSONObject s = new JSONObject(nvl(specJson, "{}"));
+      String kind = upper(s.optString("kind", s.optString("type", "PEDESTRIAN")));
+      double x = d(s, "xMm", 0);
+      double y = d(s, "yMm", 0);
+      double w = positive(d(s, "widthMm", d(s, "width", 1000)), 1000);
+      double h = positive(d(s, "heightMm", d(s, "height", 1800)), 1800);
+      int panels = Math.max(1, i(s, "panelCount", kind.contains("SWING") ? 2 : 1));
+      double overlap = Math.max(0, d(s, "overlapMm", 0));
+      String frame = s.optString("frameProfile", "40x40x2");
+      String infill = s.optString("infillProfile", "20x20x1.5");
+      double spacing = Math.max(0, d(s, "spacingMm", 100));
+      String direction = s.optString("direction", "RIGHT");
+      String motor = s.optString("motor", "");
+
+      AddAdvancedGateSystem(kind, x, y, w, h, panels, overlap, frame, infill, spacing, direction, motor);
+
+      JSONObject structure = s.optJSONObject("structure");
+      if (structure != null) {
+        SetSelectedGateStructure(
+            structure.optString("frameProfile", frame),
+            structure.optString("braceProfile", structure.optString("brace", "30x30x2")),
+            structure.optString("infillProfile", infill),
+            d(structure, "spacingMm", spacing),
+            d(structure, "infillGapMm", 0),
+            d(structure, "groundClearanceMm", d(s, "groundClearanceMm", 50)));
+      }
+
+      JSONArray hw = s.optJSONArray("hardware");
+      int hardwareAdded = 0;
+      if (hw != null) {
+        for (int idx = 0; idx < hw.length(); idx++) {
+          JSONObject q = hw.optJSONObject(idx);
+          if (q == null) continue;
+          AddHardware3D(
+              q.optString("kind", "HARDWARE"),
+              d(q, "x", 0), d(q, "y", 0), d(q, "z", 0),
+              positive(d(q, "width", 40), 40),
+              positive(d(q, "height", 40), 40),
+              positive(d(q, "depth", 20), 20),
+              q.optJSONObject("properties") != null ? q.optJSONObject("properties").toString() : q.optString("properties", "{}"));
+          hardwareAdded++;
+        }
+      }
+
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.gategenerator.v35");
+      out.put("kind", kind);
+      out.put("widthMm", w);
+      out.put("heightMm", h);
+      out.put("panelCount", panels);
+      out.put("hardwareAdded", hardwareAdded);
+      out.put("assembly", jsonOrString(PartsAssemblyJson()));
+      out.put("cutList", jsonOrString(ManufacturingCutListJson()));
+      out.put("welds", jsonOrString(WeldingAssemblyList()));
+      out.put("engineering", jsonOrString(AdvancedGateEngineering()));
+    } catch (Throwable t) {
+      putError(out, t);
+    }
+    return out.toString();
+  }
+
+  public String GeneratePedestrianGateJson(String specJson) {
+    return generateTypedGate("PEDESTRIAN", specJson);
+  }
+
+  public String GenerateSwingGateJson(String specJson) {
+    return generateTypedGate("SWING", specJson);
+  }
+
+  public String GenerateSlidingGateJson(String specJson) {
+    return generateTypedGate("SLIDING", specJson);
+  }
+
+  public String GenerateCantileverGateJson(String specJson) {
+    return generateTypedGate("CANTILEVER", specJson);
+  }
+
+  private String generateTypedGate(String kind, String specJson) {
+    try {
+      JSONObject s = new JSONObject(nvl(specJson, "{}"));
+      s.put("kind", kind);
+      return GenerateGateFromJson(s.toString());
+    } catch (Throwable t) {
+      return errorJson(t);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Stock optimization
+  // -------------------------------------------------------------------------
+
+  public String OptimizeStockLength(double stockLengthMm, double kerfMm) {
+    return OptimizeAllProfilesJson(stockLengthMm, kerfMm);
+  }
+
+  public String OptimizeAllProfilesJson(double stockLengthMm, double kerfMm) {
+    JSONObject out = new JSONObject();
+    try {
+      double stock = positive(stockLengthMm, 6000);
+      double kerf = Math.max(0, kerfMm);
+      List<CutPiece> pieces = extractCutPieces(ManufacturingCutListJson());
+      if (pieces.isEmpty()) pieces = extractCutPieces(CutList());
+      JSONObject result = optimizePieces(pieces, stock, kerf, null);
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.stockopt.v35");
+      out.put("stockLengthMm", stock);
+      out.put("kerfMm", kerf);
+      out.put("result", result);
+      gc35LastStock = out.toString();
+    } catch (Throwable t) {
+      putError(out, t);
+    }
+    return out.toString();
+  }
+
+  public String OptimizeWithInventoryJson(String inventoryJson, double kerfMm) {
+    JSONObject out = new JSONObject();
+    try {
+      List<CutPiece> pieces = extractCutPieces(ManufacturingCutListJson());
+      JSONArray inv = toArray(inventoryJson);
+      JSONObject result = optimizePieces(pieces, 6000, Math.max(0, kerfMm), inv);
+      out.put("ok", true);
+      out.put("schema", "gatecraft.cad.stockopt.inventory.v35");
+      out.put("result", result);
+      gc35LastStock = out.toString();
+    } catch (Throwable t) {
+      putError(out, t);
+    }
+    return out.toString();
+  }
+
+  public String StockOptimizationJson() {
+    return gc35LastStock;
+  }
+
+  private JSONObject optimizePieces(List<CutPiece> pieces, double defaultStock, double kerf, JSONArray inventory) throws JSONException {
+    Map<String, List<CutPiece>> grouped = new LinkedHashMap<String, List<CutPiece>>();
+    for (CutPiece p : pieces) {
+      String key = p.profile.length() == 0 ? "UNSPECIFIED" : p.profile;
+      List<CutPiece> g = grouped.get(key);
+      if (g == null) { g = new ArrayList<CutPiece>(); grouped.put(key, g); }
+      for (int n = 0; n < Math.max(1, p.qty); n++) g.add(new CutPiece(p.id, p.profile, p.lengthMm, 1));
+    }
+
+    JSONArray profiles = new JSONArray();
+    double totalRequired = 0;
+    double totalPurchased = 0;
+    for (Map.Entry<String, List<CutPiece>> en : grouped.entrySet()) {
+      List<CutPiece> g = en.getValue();
+      Collections.sort(g, new Comparator<CutPiece>() {
+        public int compare(CutPiece a, CutPiece b) { return Double.compare(b.lengthMm, a.lengthMm); }
+      });
+
+      List<Bar> bars = new ArrayList<Bar>();
+      if (inventory != null) {
+        for (int k = 0; k < inventory.length(); k++) {
+          JSONObject iv = inventory.optJSONObject(k);
+          if (iv == null) continue;
+          String p = iv.optString("profile", iv.optString("profileName", ""));
+          if (!p.equalsIgnoreCase(en.getKey())) continue;
+          double len = positive(d(iv, "
