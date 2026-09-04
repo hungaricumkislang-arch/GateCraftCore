@@ -1,0 +1,29 @@
+name: CAD v57 Export D8
+
+on:
+  push:
+    branches: [ cad-v57-runtime-fix ]
+    paths:
+      - '.github/workflows/cad-v57-export-d8.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Locate D8
+        run: |
+          set -euxo pipefail
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          PLATFORM=$(find "$ANDROID_HOME/platforms" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          mkdir -p out
+          cp "$BT/lib/d8.jar" out/d8.jar
+          cp "$PLATFORM/android.jar" out/android.jar
+          sha256sum out/* > out/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cad-v57-build-tools
+          path: out/*
+          if-no-files-found: error
