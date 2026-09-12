@@ -1,0 +1,71 @@
+name: CAD R6FK R6AM D1 Engine
+
+on:
+  push:
+    branches: [ cad-r6fk-r6am-debloat-d1 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant
+
+      - name: Get MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+
+      - name: Install isolated GateCraft CAD engine source
+        run: |
+          rm -rf buildenv/src/*
+          mkdir -p buildenv/src/com/gatecraft/cadengine
+          cp cad_debloat/r6fk_d1/src/com/gatecraft/cadengine/GateCraftCADEngine.java buildenv/src/com/gatecraft/cadengine/
+
+      - name: Build AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+
+      - name: Static artifact checks
+        run: |
+          find buildenv/out -maxdepth 2 -type f -print
+          AIX="$(find buildenv/out -type f -name '*.aix' | head -1)"
+          test -n "$AIX"
+          unzip -t "$AIX"
+          unzip -p "$AIX" '*/components.json' > /tmp/components.json
+          python3 - <<'PY'
+          import json
+          p='/tmp/components.json'
+          d=json.load(open(p,encoding='utf-8'))
+          c=d[0] if isinstance(d,list) else d
+          names=[m.get('name') for m in c.get('methods',[])]
+          assert 'ProfileContactGapR6AMJson' in names, names
+          m=next(m for m in c['methods'] if m.get('name')=='ProfileContactGapR6AMJson')
+          assert len(m.get('params',[]))==4, m
+          assert m.get('returnType')=='text', m
+          print('descriptor method PASS', m)
+          PY
+          sha256sum "$AIX" > buildenv/out/SHA256SUMS.txt
+
+      - name: Upload AIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftCADEngine-R6FK-D1
+          path: |
+            buildenv/out/*.aix
+            buildenv/out/SHA256SUMS.txt
+          if-no-files-found: error
