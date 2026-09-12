@@ -42,62 +42,106 @@ public final class GateCraftCADEngine extends AndroidNonvisibleComponent impleme
   @SimpleFunction(description = "R6AM exact profile endpoint/AABB gap diagnostic JSON. Read-only.")
   public String ProfileContactGapR6AMJson(String idA, String idB, String sceneJson, String boundsJson) {
     try {
-      if (idA == null || idB == null || idA.length() == 0 || idB.length() == 0 || idA.equals(idB)) {
-        return error("GC_R6AM_BAD_IDS");
-      }
-
-      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
-      JSONObject bounds = new JSONObject(boundsJson == null ? "{}" : boundsJson);
-      JSONObject objectA = findById(scene.optJSONArray("objects"), idA);
-      JSONObject objectB = findById(scene.optJSONArray("objects"), idB);
-      JSONObject boundA = findById(bounds.optJSONArray("objects"), idA);
-      JSONObject boundB = findById(bounds.optJSONArray("objects"), idB);
-      if (objectA == null || objectB == null || boundA == null || boundB == null) {
-        return error("GC_R6AM_OBJECT_OR_BOUNDS_MISSING");
-      }
-
-      JSONObject metaA = objectA.optJSONObject("metadata");
-      JSONObject metaB = objectB.optJSONObject("metadata");
-      JSONObject transformA = objectA.optJSONObject("transform");
-      JSONObject transformB = objectB.optJSONObject("transform");
-      if (!supportedExactProfile(metaA, transformA) || !supportedExactProfile(metaB, transformB)) {
-        return error("GC_R6AM_EXACT_PROFILE_REQUIRED");
-      }
-
-      double[] minA = vec3(boundA.optJSONArray("min"));
-      double[] maxA = vec3(boundA.optJSONArray("max"));
-      double[] minB = vec3(boundB.optJSONArray("min"));
-      double[] maxB = vec3(boundB.optJSONArray("max"));
-      if (minA == null || maxA == null || minB == null || maxB == null) {
-        return error("GC_R6AM_BAD_BOUNDS");
-      }
-
-      double[][] endA = endpoints(metaA, transformA);
-      double[][] endB = endpoints(metaB, transformB);
-      double gap = Double.POSITIVE_INFINITY;
-
-      for (int a = 0; a < 2; a++) {
-        for (int b = 0; b < 2; b++) {
-          gap = Math.min(gap, distance(endA[a], endB[b]));
-        }
-      }
-      for (int a = 0; a < 2; a++) {
-        gap = Math.min(gap, pointAabbDistance(endA[a], minB, maxB));
-      }
-      for (int b = 0; b < 2; b++) {
-        gap = Math.min(gap, pointAabbDistance(endB[b], minA, maxA));
-      }
-
-      JSONObject result = new JSONObject();
-      result.put("ok", true);
-      result.put("schema", "gatecraft.r6am.profile-gap.v1");
-      result.put("idA", idA);
-      result.put("idB", idB);
-      result.put("gapMm", gap);
-      return result.toString();
+      return profileGapResult(idA, idB, sceneJson, boundsJson).toString();
     } catch (Throwable t) {
       return error("GC_R6AM_ENGINE_FAILED");
     }
+  }
+
+  @SimpleFunction(description = "R6AM full profile contact audit from current CAD JSON snapshots. Read-only.")
+  public String ProfileContactAuditR6AMJson(String multiSelectionJson, String sceneJson,
+                                             String boundsJson, String collisionJson,
+                                             double toleranceMm) {
+    try {
+      JSONObject multi = new JSONObject(multiSelectionJson == null ? "{}" : multiSelectionJson);
+      JSONArray ids = multi.optJSONArray("ids");
+      if (ids == null || ids.length() != 2) return error("GC_R6AM_SELECT_EXACTLY_2");
+      String idA = ids.optString(0, "");
+      String idB = ids.optString(1, "");
+      if (idA.length() == 0 || idB.length() == 0 || idA.equals(idB)) return error("GC_R6AM_SELECT_EXACTLY_2");
+
+      JSONObject gapResult = profileGapResult(idA, idB, sceneJson, boundsJson);
+      if (!gapResult.optBoolean("ok", false)) return gapResult.toString();
+
+      JSONObject collisionsDoc = new JSONObject(collisionJson == null ? "{}" : collisionJson);
+      JSONArray collisions = collisionsDoc.optJSONArray("collisions");
+      boolean intersect = false;
+      if (collisions != null) {
+        for (int i = 0; i < collisions.length(); i++) {
+          JSONObject c = collisions.optJSONObject(i);
+          if (c == null) continue;
+          String a = c.optString("a", "");
+          String b = c.optString("b", "");
+          if ((idA.equals(a) && idB.equals(b)) || (idA.equals(b) && idB.equals(a))) {
+            intersect = true;
+            break;
+          }
+        }
+      }
+
+      double gap = gapResult.getDouble("gapMm");
+      String cls = intersect ? "INTERSECT" : (gap <= toleranceMm ? "CONTACT" : "GAP");
+      gapResult.put("schema", "gatecraft.r6am.profile-contact.v1");
+      gapResult.put("class", cls);
+      gapResult.put("intersect", intersect);
+      gapResult.put("toleranceMm", toleranceMm);
+      return gapResult.toString();
+    } catch (Throwable t) {
+      return error("GC_R6AM_ENGINE_FAILED");
+    }
+  }
+
+  private static JSONObject profileGapResult(String idA, String idB, String sceneJson, String boundsJson) throws Exception {
+    if (idA == null || idB == null || idA.length() == 0 || idB.length() == 0 || idA.equals(idB)) {
+      return errorObject("GC_R6AM_BAD_IDS");
+    }
+
+    JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+    JSONObject bounds = new JSONObject(boundsJson == null ? "{}" : boundsJson);
+    JSONObject objectA = findById(scene.optJSONArray("objects"), idA);
+    JSONObject objectB = findById(scene.optJSONArray("objects"), idB);
+    JSONObject boundA = findById(bounds.optJSONArray("objects"), idA);
+    JSONObject boundB = findById(bounds.optJSONArray("objects"), idB);
+    if (objectA == null || objectB == null || boundA == null || boundB == null) {
+      return errorObject("GC_R6AM_OBJECT_OR_BOUNDS_MISSING");
+    }
+
+    JSONObject metaA = objectA.optJSONObject("metadata");
+    JSONObject metaB = objectB.optJSONObject("metadata");
+    JSONObject transformA = objectA.optJSONObject("transform");
+    JSONObject transformB = objectB.optJSONObject("transform");
+    if (!supportedExactProfile(metaA, transformA) || !supportedExactProfile(metaB, transformB)) {
+      return errorObject("GC_R6AM_EXACT_PROFILE_REQUIRED");
+    }
+
+    double[] minA = vec3(boundA.optJSONArray("min"));
+    double[] maxA = vec3(boundA.optJSONArray("max"));
+    double[] minB = vec3(boundB.optJSONArray("min"));
+    double[] maxB = vec3(boundB.optJSONArray("max"));
+    if (minA == null || maxA == null || minB == null || maxB == null) {
+      return errorObject("GC_R6AM_OBJECT_OR_BOUNDS_MISSING");
+    }
+
+    double[][] endA = endpoints(metaA, transformA);
+    double[][] endB = endpoints(metaB, transformB);
+    double gap = Double.POSITIVE_INFINITY;
+    for (int a = 0; a < 2; a++) {
+      for (int b = 0; b < 2; b++) gap = Math.min(gap, distance(endA[a], endB[b]));
+    }
+    for (int a = 0; a < 2; a++) gap = Math.min(gap, pointAabbDistance(endA[a], minB, maxB));
+    for (int b = 0; b < 2; b++) gap = Math.min(gap, pointAabbDistance(endB[b], minA, maxA));
+
+    JSONObject result = new JSONObject();
+    result.put("ok", true);
+    result.put("schema", "gatecraft.r6am.profile-gap.v1");
+    result.put("idA", idA);
+    result.put("idB", idB);
+    result.put("gapMm", gap);
+    result.put("metadataA", metaA);
+    result.put("metadataB", metaB);
+    result.put("transformA", transformA);
+    result.put("transformB", transformB);
+    return result;
   }
 
   private static boolean supportedExactProfile(JSONObject metadata, JSONObject transform) {
@@ -122,10 +166,7 @@ public final class GateCraftCADEngine extends AndroidNonvisibleComponent impleme
 
   private static double[][] endpoints(JSONObject metadata, JSONObject transform) {
     double half = 0.5 * metadata.optDouble("cutLengthMm", 0.0);
-    return new double[][] {
-      world(transform, 0.0, 0.0, -half),
-      world(transform, 0.0, 0.0, half)
-    };
+    return new double[][] { world(transform, 0.0, 0.0, -half), world(transform, 0.0, 0.0, half) };
   }
 
   // Exact R6AM/runtime order: scale -> rotate X -> rotate Y -> rotate Z -> translate.
@@ -173,14 +214,15 @@ public final class GateCraftCADEngine extends AndroidNonvisibleComponent impleme
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
   }
 
+  private static JSONObject errorObject(String code) throws Exception {
+    JSONObject result = new JSONObject();
+    result.put("ok", false);
+    result.put("code", code);
+    return result;
+  }
+
   private static String error(String code) {
-    try {
-      JSONObject result = new JSONObject();
-      result.put("ok", false);
-      result.put("code", code);
-      return result.toString();
-    } catch (Throwable ignored) {
-      return "{\"ok\":false,\"code\":\"GC_R6AM_ENGINE_FAILED\"}";
-    }
+    try { return errorObject(code).toString(); }
+    catch (Throwable ignored) { return "{\"ok\":false,\"code\":\"GC_R6AM_ENGINE_FAILED\"}"; }
   }
 }
