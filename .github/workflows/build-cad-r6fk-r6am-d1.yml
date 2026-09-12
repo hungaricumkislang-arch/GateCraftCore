@@ -1,0 +1,42 @@
+name: Build CAD R6FK R6AM D1
+
+on:
+  push:
+    branches: [ cad-r6fk-r6am-debloat-d1 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Install Ant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant
+      - name: Get MIT App Inventor extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git buildenv
+      - name: Install compact CAD engine source
+        run: |
+          rm -rf buildenv/src/*
+          mkdir -p buildenv/src/com/gatecraft/cadengine
+          cp cad_debloat/r6fk_d1/src/com/gatecraft/cadengine/GateCraftCADEngine.java buildenv/src/com/gatecraft/cadengine/GateCraftCADEngine.java
+      - name: Build AIX
+        run: |
+          cd buildenv
+          ant clean extensions
+      - name: Show output
+        run: find buildenv/out -maxdepth 2 -type f -print
+      - name: Upload AIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: GateCraftCADEngine-R6FK-D1
+          path: buildenv/out/*.aix
+          if-no-files-found: error
