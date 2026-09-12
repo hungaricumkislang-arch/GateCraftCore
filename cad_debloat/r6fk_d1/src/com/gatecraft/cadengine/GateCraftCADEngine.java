@@ -23,7 +23,23 @@ public final class GateCraftCADEngine extends AndroidNonvisibleComponent impleme
     super(container.$form());
   }
 
-  @SimpleFunction(description = "R6AM exact profile endpoint/AABB gap calculation. Read-only.")
+  @SimpleFunction(description = "R6AM exact profile endpoint/AABB gap in mm. Read-only.")
+  public double ProfileContactGapR6AM(String idA, String idB, String sceneJson, String boundsJson) {
+    String json = ProfileContactGapR6AMJson(idA, idB, sceneJson, boundsJson);
+    try {
+      JSONObject result = new JSONObject(json);
+      if (!result.optBoolean("ok", false) || !result.has("gapMm")) {
+        throw new IllegalStateException(result.optString("code", "GC_R6AM_ENGINE_FAILED"));
+      }
+      return result.getDouble("gapMm");
+    } catch (RuntimeException ex) {
+      throw ex;
+    } catch (Throwable ex) {
+      throw new IllegalStateException("GC_R6AM_ENGINE_FAILED", ex);
+    }
+  }
+
+  @SimpleFunction(description = "R6AM exact profile endpoint/AABB gap diagnostic JSON. Read-only.")
   public String ProfileContactGapR6AMJson(String idA, String idB, String sceneJson, String boundsJson) {
     try {
       if (idA == null || idB == null || idA.length() == 0 || idB.length() == 0 || idA.equals(idB)) {
