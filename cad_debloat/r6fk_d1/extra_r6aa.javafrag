@@ -1,0 +1,66 @@
+
+  @SimpleFunction(description = "R6AA selective folding swept-AABB safety at exact 2-percent samples. Exact port of existing Blockly broad-phase; patches same-gate panel safety metadata only.")
+  public String FoldingSafetyR6AAJson(String gateId, String sceneJson, String boundsJson) {
+    try {
+      final double clearance=10.0;
+      String gid=gateId==null?"":gateId;
+      if(gid.length()==0||"0".equals(gid)||"-1".equals(gid)) return error("GC_R6AA_BAD_GATE");
+      JSONObject scene=new JSONObject(sceneJson==null?"{}":sceneJson);
+      JSONObject bd=new JSONObject(boundsJson==null?"{}":boundsJson);
+      JSONArray objects=scene.optJSONArray("objects"), bounds=bd.optJSONArray("objects");
+      if(objects==null||bounds==null) return error("GC_R6AA_SCENE_OR_BOUNDS_MISSING");
+      JSONObject p0=findFoldPanel(objects,gid,0);
+      if(p0==null) return error("GC_R6AA_FOLD_SETUP_REQUIRED");
+      JSONObject m0=p0.optJSONObject("metadata"); if(m0==null) return error("GC_R6AA_FOLD_SETUP_REQUIRED");
+      int count=0; for(int i=0;i<8;i++){if(findFoldPanel(objects,gid,i)!=null)count++;else break;}
+      if(!(count==2||count==4||count==6||count==8)) return error("GC_R6AA_FOLD_SETUP_REQUIRED");
+      double panelLen=m0.optDouble("gcFoldPanelLength",0.0), baseZ=m0.optDouble("gcFoldBaseZ",0.0), baseRy=m0.optDouble("gcFoldBaseRotateY",0.0);
+      int dirSign=m0.optInt("gcFoldDirectionSign",1);
+      JSONObject t0=p0.optJSONObject("transform"); if(t0==null||!(panelLen>0.0)) return error("GC_R6AA_FOLD_SETUP_REQUIRED");
+      double anchorX=t0.optDouble("x",0.0)-Math.cos(Math.toRadians(baseRy))*panelLen*0.5;
+      double anchorZ=baseZ;
+      String gateAsm=m0.optString("assembly","");
+      java.util.HashSet<String> exclude=new java.util.HashSet<String>();
+      for(int i=0;i<objects.length();i++){
+        JSONObject o=objects.optJSONObject(i); if(o==null)continue; JSONObject m=o.optJSONObject("metadata"); if(m==null)m=new JSONObject();
+        if(sameId(m.opt("gcFoldGateId"),gid)||(gateAsm.length()>0&&gateAsm.equals(m.optString("assembly","")))) exclude.add(o.optString("id",""));
+      }
+      int[] na={0,1,1,2,2,3,3,4}; int[] nb={0,0,1,1,2,2,3,3}; int[] par={1,-1,1,-1,1,-1,1,-1};
+      double safeMax=100.0; String limiter="";
+      for(int pct=0;pct<=100;pct+=2){
+        if(pct>safeMax) continue;
+        double delta=dirSign*(85.0*(pct/100.0));
+        double anga=baseRy+delta, angb=baseRy-delta;
+        double ca=Math.cos(Math.toRadians(anga)), sa=Math.sin(Math.toRadians(anga));
+        double cb=Math.cos(Math.toRadians(angb)), sb=Math.sin(Math.toRadians(angb));
+        for(int i=0;i<count;i++){
+          JSONObject panel=findFoldPanel(objects,gid,i); if(panel==null)continue;
+          double ax=anchorX+panelLen*(na[i]*ca+nb[i]*cb);
+          double az=anchorZ-panelLen*(na[i]*sa+nb[i]*sb);
+          double ex=ax+panelLen*(par[i]==1?ca:cb);
+          double ez=az-panelLen*(par[i]==1?sa:sb);
+          JSONObject pb=findById(bounds,panel.optString("id","")); if(pb==null)continue;
+          double[] pmin=vec3(pb.optJSONArray("min")), pmax=vec3(pb.optJSONArray("max")); if(pmin==null||pmax==null)continue;
+          double radius=clearance+Math.min(pmax[0]-pmin[0],pmax[2]-pmin[2])*0.5;
+          double segMinX=Math.min(ax,ex)-radius, segMaxX=Math.max(ax,ex)+radius;
+          double segMinZ=Math.min(az,ez)-radius, segMaxZ=Math.max(az,ez)+radius;
+          double ymin=pmin[1]-clearance, ymax=pmax[1]+clearance;
+          for(int j=0;j<bounds.length();j++){
+            JSONObject ob=bounds.optJSONObject(j); if(ob==null)continue; String oid=ob.optString("id",""); if(exclude.contains(oid))continue;
+            double[] omin=vec3(ob.optJSONArray("min")), omax=vec3(ob.optJSONArray("max")); if(omin==null||omax==null)continue;
+            boolean hit=segMaxX>omin[0]&&segMinX<omax[0]&&ymax>omin[1]&&ymin<omax[1]&&segMaxZ>omin[2]&&segMinZ<omax[2];
+            if(hit){safeMax=pct>=2?pct-2:0; limiter=oid;}
+          }
+        }
+      }
+      int pinch=count-1;
+      for(int i=0;i<objects.length();i++){
+        JSONObject o=objects.optJSONObject(i); if(o==null||!"FOLDING_PANEL".equals(o.optString("type","")))continue;
+        JSONObject m=o.optJSONObject("metadata"); if(m==null||!sameId(m.opt("gcFoldGateId"),gid))continue;
+        m.put("gcFoldSafeMaxPercent",safeMax); m.put("gcFoldSafetyLimiterId",limiter); m.put("gcFoldSafetyClearanceMm",clearance);
+        m.put("gcFoldSafetySchema","R6AA_SELECTIVE_SWEEP_AABB_2PCT"); m.put("gcFoldPinchHazardCount",pinch);
+      }
+      JSONObject out=new JSONObject(); out.put("ok",true); out.put("schema","gatecraft.r6aa.fold-safe.v1"); out.put("sceneJson",scene.toString());
+      out.put("safeMaxPercent",safeMax); out.put("limiterId",limiter); out.put("pinchCount",pinch); return out.toString();
+    }catch(Throwable t){return error("GC_R6AA_ENGINE_FAILED");}
+  }
