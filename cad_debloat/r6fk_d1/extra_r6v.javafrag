@@ -1,0 +1,112 @@
+
+  @SimpleFunction(description = "R6V exact telescope support link + persistent endpoint drive ratios. Patches only same-gate telescope metadata in the supplied scene JSON.")
+  public String TelescopicLinkR6VJson(String gateId, String sceneJson) {
+    try {
+      String gid = gateId == null ? "" : gateId;
+      if (gid.length() == 0 || "0".equals(gid) || "-1".equals(gid)) return error("GC_R6V_BAD_GATE");
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      if (objects == null) return error("GC_R6V_SCENE_MISSING");
+
+      JSONObject guide = null, support = null, master = null;
+      double supportDist = Double.POSITIVE_INFINITY;
+      double masterTravel = 0.0;
+      int leafCount = 0;
+
+      for (int i = 0; i < objects.length(); i++) {
+        JSONObject o = objects.optJSONObject(i);
+        if (o == null) continue;
+        JSONObject m = o.optJSONObject("metadata");
+        if (m == null) continue;
+        if (sameId(m.opt("gcTelGateId"), gid) && "GUIDE".equals(m.optString("gcTelHwRole", ""))) {
+          guide = o;
+          break;
+        }
+      }
+      if (guide == null) return error("GC_R6V_GUIDE_MISSING");
+      JSONObject gt = guide.optJSONObject("transform");
+      if (gt == null) return error("GC_R6V_GUIDE_TRANSFORM_MISSING");
+      double gx = gt.optDouble("x",0.0), gy = gt.optDouble("y",0.0), gz = gt.optDouble("z",0.0);
+
+      for (int i = 0; i < objects.length(); i++) {
+        JSONObject o = objects.optJSONObject(i);
+        if (o == null) continue;
+        JSONObject m = o.optJSONObject("metadata");
+        if (m == null) continue;
+        if ("TELESCOPIC_LEAF".equals(o.optString("type", "")) && sameId(m.opt("gcTelGateId"), gid)) {
+          leafCount++;
+          double travel = Math.abs(m.optDouble("gcTelOpenX",0.0) - m.optDouble("gcTelClosedX",0.0));
+          if (travel > masterTravel) { masterTravel = travel; master = o; }
+        }
+      }
+      if (leafCount <= 1 || master == null || !(masterTravel > 0.0)) return error("GC_R6V_MASTER_SET_INCOMPLETE");
+      String masterId = master.optString("id", "");
+      if (masterId.length() == 0) return error("GC_R6V_MASTER_ID_MISSING");
+
+      for (int i = 0; i < objects.length(); i++) {
+        JSONObject o = objects.optJSONObject(i);
+        if (o == null) continue;
+        String type = o.optString("type", "");
+        if (!"POST".equals(type) && !"FOUNDATION".equals(type)) continue;
+        JSONObject t = o.optJSONObject("transform");
+        if (t == null) continue;
+        double dx=t.optDouble("x",0.0)-gx, dy=t.optDouble("y",0.0)-gy, dz=t.optDouble("z",0.0)-gz;
+        double d2=dx*dx+dy*dy+dz*dz;
+        if (d2 < supportDist) { supportDist=d2; support=o; }
+      }
+      if (support == null) return error("GC_R6V_SUPPORT_MISSING");
+      JSONObject st=support.optJSONObject("transform");
+      if (st == null) return error("GC_R6V_SUPPORT_TRANSFORM_MISSING");
+      double sx=st.optDouble("scaleX",1.0), sy=st.optDouble("scaleY",1.0), sz=st.optDouble("scaleZ",1.0);
+      if (sx==0.0 || sy==0.0 || sz==0.0) return error("GC_R6V_SUPPORT_ZERO_SCALE");
+
+      double dx=gx-st.optDouble("x",0.0), dy=gy-st.optDouble("y",0.0), dz=gz-st.optDouble("z",0.0);
+      double rz=Math.toRadians(st.optDouble("rotateZ",0.0));
+      double x1=dx*Math.cos(rz)+dy*Math.sin(rz);
+      double y1=-dx*Math.sin(rz)+dy*Math.cos(rz);
+      double z1=dz;
+      double ry=Math.toRadians(st.optDouble("rotateY",0.0));
+      double x2=x1*Math.cos(ry)-z1*Math.sin(ry);
+      double y2=y1;
+      double z2=x1*Math.sin(ry)+z1*Math.cos(ry);
+      double rx=Math.toRadians(st.optDouble("rotateX",0.0));
+      double lx=x2/sx;
+      double ly=(y2*Math.cos(rx)+z2*Math.sin(rx))/sy;
+      double lz=(-y2*Math.sin(rx)+z2*Math.cos(rx))/sz;
+
+      JSONObject gm=guide.optJSONObject("metadata");
+      if (gm==null) { gm=new JSONObject(); guide.put("metadata",gm); }
+      gm.put("parentId",support.optString("id",""));
+      gm.put("attachX",lx); gm.put("attachY",ly); gm.put("attachZ",lz);
+      gm.put("gcTelSupportType",support.optString("type",""));
+      gm.put("gcTelSupportLinkSchema","R6V_WORLD_TO_LOCAL_SUPPORT_LINK");
+      gm.put("gcTelSupportAutoBound",true);
+
+      for (int i = 0; i < objects.length(); i++) {
+        JSONObject o=objects.optJSONObject(i); if (o==null) continue;
+        JSONObject m=o.optJSONObject("metadata"); if (m==null) continue;
+        if ("TELESCOPIC_LEAF".equals(o.optString("type","")) && sameId(m.opt("gcTelGateId"),gid)) {
+          double signed=m.optDouble("gcTelOpenX",0.0)-m.optDouble("gcTelClosedX",0.0);
+          m.put("gcTelDriveRatio",signed/masterTravel);
+          m.put("gcTelMasterLeafId",masterId);
+          m.put("gcTelMasterTravel",masterTravel);
+          m.put("gcTelDriverSchema","R6V_EXACT_ENDPOINT_RATIO");
+          m.put("gcTelDriverMaster",masterId.equals(o.optString("id","")));
+        }
+        if (sameId(m.opt("gcTelGateId"),gid) && "CARRIAGE".equals(m.optString("gcTelHwRole",""))) {
+          m.put("gcTelDriveRatio",1.0);
+          m.put("gcTelMasterLeafId",masterId);
+          m.put("gcTelDriverSchema","R6V_EXACT_ENDPOINT_RATIO");
+        }
+      }
+
+      JSONObject out=new JSONObject();
+      out.put("ok",true); out.put("schema","gatecraft.r6v.tel-link.v1");
+      out.put("sceneJson",scene.toString());
+      out.put("guideId",guide.optString("id",""));
+      out.put("supportId",support.optString("id",""));
+      out.put("supportType",support.optString("type",""));
+      out.put("leafCount",leafCount); out.put("masterId",masterId); out.put("masterTravel",masterTravel);
+      return out.toString();
+    } catch (Throwable t) { return error("GC_R6V_ENGINE_FAILED"); }
+  }
