@@ -1,0 +1,19 @@
+
+  @SimpleFunction(description = "R6AN guarded collinear fit: current MULTI selection must still equal the audited ordered R6AM pair.")
+  public String ProfileCollinearFitSelectedR6ANJson(String sceneJson, String multiSelectionJson,
+                                                     String auditedIdA, String auditedIdB) {
+    try {
+      JSONObject multi = new JSONObject(multiSelectionJson == null ? "{}" : multiSelectionJson);
+      JSONArray ids = multi.optJSONArray("ids");
+      if (ids == null || ids.length() != 2) return error("GC_R6AN_SELECT_EXACTLY_2");
+      String a = ids.optString(0, "");
+      String b = ids.optString(1, "");
+      if (auditedIdA == null || auditedIdB == null || auditedIdA.length() == 0 || auditedIdB.length() == 0)
+        return error("GC_R6AN_RUN_CONTACT_FIRST");
+      if (!auditedIdA.equals(a) || !auditedIdB.equals(b))
+        return error("GC_R6AN_SELECTION_CHANGED");
+      return ProfileCollinearFitR6ANJson(sceneJson, auditedIdA, auditedIdB);
+    } catch (Throwable t) {
+      return error("GC_R6AN_ENGINE_FAILED");
+    }
+  }
