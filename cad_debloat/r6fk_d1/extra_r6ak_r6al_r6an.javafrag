@@ -1,0 +1,195 @@
+
+  @SimpleFunction(description = "R6AK exact rising actuator inverse solve. Returns solved leaf angle in degrees, or -1 when mounting is invalid/non-monotonic.")
+  public double SolveRisingActuatorAngleR6AK(double commandPercent,
+      double hingeX, double hingeY, double hingeZ, double planarAxisY,
+      double riseAxisY, double riseAxisZ, double frontRadius, double mountY,
+      double rearX, double rearY, double rearZ) {
+    double l0 = risingActuatorLengthR6AK(0.0, hingeX, hingeY, hingeZ, planarAxisY, riseAxisY, riseAxisZ, frontRadius, mountY, rearX, rearY, rearZ);
+    double l25 = risingActuatorLengthR6AK(22.5, hingeX, hingeY, hingeZ, planarAxisY, riseAxisY, riseAxisZ, frontRadius, mountY, rearX, rearY, rearZ);
+    double l50 = risingActuatorLengthR6AK(45.0, hingeX, hingeY, hingeZ, planarAxisY, riseAxisY, riseAxisZ, frontRadius, mountY, rearX, rearY, rearZ);
+    double l75 = risingActuatorLengthR6AK(67.5, hingeX, hingeY, hingeZ, planarAxisY, riseAxisY, riseAxisZ, frontRadius, mountY, rearX, rearY, rearZ);
+    double l90 = risingActuatorLengthR6AK(90.0, hingeX, hingeY, hingeZ, planarAxisY, riseAxisY, riseAxisZ, frontRadius, mountY, rearX, rearY, rearZ);
+    boolean inc = l0 <= l25 && l25 <= l50 && l50 <= l75 && l75 <= l90;
+    boolean dec = l0 >= l25 && l25 >= l50 && l50 >= l75 && l75 >= l90;
+    if (!inc && !dec) return -1.0;
+    double cmd = Math.max(0.0, Math.min(100.0, commandPercent));
+    double target = l0 + (l90 - l0) * (cmd / 100.0);
+    double low = 0.0, high = 90.0;
+    for (int i = 0; i < 14; i++) {
+      double mid = (low + high) * 0.5;
+      double lm = risingActuatorLengthR6AK(mid, hingeX, hingeY, hingeZ, planarAxisY, riseAxisY, riseAxisZ, frontRadius, mountY, rearX, rearY, rearZ);
+      if (inc) {
+        if (lm < target) low = mid; else high = mid;
+      } else {
+        if (lm > target) low = mid; else high = mid;
+      }
+    }
+    return (low + high) * 0.5;
+  }
+
+  @SimpleFunction(description = "R6AK exact actuator length for a rising leaf angle. Pure numeric helper.")
+  public double RisingActuatorLengthR6AK(double angleDeg,
+      double hingeX, double hingeY, double hingeZ, double planarAxisY,
+      double riseAxisY, double riseAxisZ, double frontRadius, double mountY,
+      double rearX, double rearY, double rearZ) {
+    return risingActuatorLengthR6AK(angleDeg, hingeX, hingeY, hingeZ, planarAxisY, riseAxisY, riseAxisZ, frontRadius, mountY, rearX, rearY, rearZ);
+  }
+
+  @SimpleFunction(description = "R6AL LEFT actuator inverse solve for coordinated dual rising motion. Returns shared leaf angle in degrees, or -1 when invalid/non-monotonic.")
+  public double SolveDualRisingLeftAngleR6AL(double commandPercent,
+      double hingeX, double hingeY, double hingeZ, double axisY, double axisZ,
+      double frontRadius, double mountY, double supportX, double supportZ) {
+    double l0 = dualRisingActuatorLengthR6AL(0.0, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    double l25 = dualRisingActuatorLengthR6AL(22.5, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    double l50 = dualRisingActuatorLengthR6AL(45.0, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    double l75 = dualRisingActuatorLengthR6AL(67.5, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    double l90 = dualRisingActuatorLengthR6AL(90.0, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    boolean inc = l0 <= l25 && l25 <= l50 && l50 <= l75 && l75 <= l90;
+    boolean dec = l0 >= l25 && l25 >= l50 && l50 >= l75 && l75 >= l90;
+    if (!inc && !dec) return -1.0;
+    double cmd = Math.max(0.0, Math.min(100.0, commandPercent));
+    double target = l0 + (l90 - l0) * (cmd / 100.0);
+    double low = 0.0, high = 90.0;
+    for (int i = 0; i < 14; i++) {
+      double mid = (low + high) * 0.5;
+      double lm = dualRisingActuatorLengthR6AL(mid, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+      if (inc) {
+        if (lm < target) low = mid; else high = mid;
+      } else {
+        if (lm > target) low = mid; else high = mid;
+      }
+    }
+    return (low + high) * 0.5;
+  }
+
+  @SimpleFunction(description = "R6AL RIGHT actuator normalized stroke percent at shared leaf angle.")
+  public double DualRisingRightPercentR6AL(double angleDeg,
+      double hingeX, double hingeY, double hingeZ, double axisY, double axisZ,
+      double frontRadius, double mountY, double supportX, double supportZ) {
+    double r0 = dualRisingActuatorLengthR6AL(0.0, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    double r90 = dualRisingActuatorLengthR6AL(90.0, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    double rat = dualRisingActuatorLengthR6AL(angleDeg, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+    double d = r90 - r0;
+    if (Math.abs(d) < 1e-12) return -1.0;
+    return 100.0 * ((rat - r0) / d);
+  }
+
+  @SimpleFunction(description = "R6AL exact actuator length helper for one dual-rising side.")
+  public double DualRisingActuatorLengthR6AL(double angleDeg,
+      double hingeX, double hingeY, double hingeZ, double axisY, double axisZ,
+      double frontRadius, double mountY, double supportX, double supportZ) {
+    return dualRisingActuatorLengthR6AL(angleDeg, hingeX, hingeY, hingeZ, axisY, axisZ, frontRadius, mountY, supportX, supportZ);
+  }
+
+  @SimpleFunction(description = "R6AN exact reversible collinear profile fit. Returns result JSON with sceneJson/preTransform/postTransform.")
+  public String ProfileCollinearFitR6ANJson(String sceneJson, String idA, String idB) {
+    try {
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      JSONObject a = findById(objects, idA);
+      JSONObject b = findById(objects, idB);
+      if (a == null || b == null || idA == null || idB == null || idA.length() == 0 || idB.length() == 0 || idA.equals(idB)) return error("GC_R6AN_BAD_PAIR");
+      JSONObject ma = a.optJSONObject("metadata");
+      JSONObject mb = b.optJSONObject("metadata");
+      JSONObject ta = a.optJSONObject("transform");
+      JSONObject tb = b.optJSONObject("transform");
+      if (!supportedExactProfile(ma, ta) || !supportedExactProfile(mb, tb)) return error("GC_R6AN_EXACT_PROFILE_REQUIRED");
+      if (ma.optBoolean("nativeLinked", false) || ma.optString("legacySourceId", "").length() > 0) return error("GC_R6AN_NATIVE_LINKED_A_REFUSED");
+
+      double[] ax = localZAxis(ta);
+      double[] bx = localZAxis(tb);
+      double dot = ax[0] * bx[0] + ax[1] * bx[1] + ax[2] * bx[2];
+      if (Math.abs(dot) < Math.cos(Math.toRadians(1.0))) return error("GC_R6AN_AXES_NOT_PARALLEL");
+
+      double la = ma.optDouble("cutLengthMm", 0.0) * ta.optDouble("scaleZ", 1.0);
+      double lb = mb.optDouble("cutLengthMm", 0.0) * tb.optDouble("scaleZ", 1.0);
+      if (la <= 0.0 || lb <= 0.0) return error("GC_R6AN_BAD_LENGTH");
+      double[] ca = new double[] { ta.optDouble("x", 0.0), ta.optDouble("y", 0.0), ta.optDouble("z", 0.0) };
+      double[] cb = new double[] { tb.optDouble("x", 0.0), tb.optDouble("y", 0.0), tb.optDouble("z", 0.0) };
+
+      double best = Double.POSITIVE_INFINITY;
+      int aSign = -1, bSign = -1;
+      int[] signs = new int[] {-1, 1};
+      for (int as : signs) {
+        double[] ea = new double[] { ca[0] + as * 0.5 * la * ax[0], ca[1] + as * 0.5 * la * ax[1], ca[2] + as * 0.5 * la * ax[2] };
+        for (int bs : signs) {
+          double[] eb = new double[] { cb[0] + bs * 0.5 * lb * bx[0], cb[1] + bs * 0.5 * lb * bx[1], cb[2] + bs * 0.5 * lb * bx[2] };
+          double d = distance(ea, eb);
+          if (d < best) { best = d; aSign = as; bSign = bs; }
+        }
+      }
+
+      double[] targetB = new double[] { cb[0] + bSign * 0.5 * lb * bx[0], cb[1] + bSign * 0.5 * lb * bx[1], cb[2] + bSign * 0.5 * lb * bx[2] };
+      double vx = targetB[0] - ca[0], vy = targetB[1] - ca[1], vz = targetB[2] - ca[2];
+      double proj = vx * ax[0] + vy * ax[1] + vz * ax[2];
+      double vv = vx * vx + vy * vy + vz * vz;
+      double perp2 = vv - proj * proj;
+      double perp = Math.sqrt(perp2 > 0.0 ? perp2 : 0.0);
+      if (perp > 0.25) return error("GC_R6AN_CENTERLINE_OFFSET");
+
+      double fixed = -aSign * 0.5 * la;
+      double newLength = aSign * (proj - fixed);
+      if (!(newLength > 0.0) || !Double.isFinite(newLength)) return error("GC_R6AN_BAD_NEW_LENGTH");
+      double newCenter = 0.5 * (proj + fixed);
+      JSONObject pre = new JSONObject(ta.toString());
+      JSONObject post = new JSONObject(ta.toString());
+      post.put("x", ca[0] + newCenter * ax[0]);
+      post.put("y", ca[1] + newCenter * ax[1]);
+      post.put("z", ca[2] + newCenter * ax[2]);
+      post.put("scaleZ", newLength / ma.optDouble("cutLengthMm", 1.0));
+      a.put("transform", post);
+
+      JSONObject out = new JSONObject();
+      out.put("ok", true);
+      out.put("schema", "gatecraft.r6an.collinear-fit.v1");
+      out.put("idA", idA);
+      out.put("idB", idB);
+      out.put("aSign", aSign);
+      out.put("bSign", bSign);
+      out.put("axisDot", dot);
+      out.put("perpMm", perp);
+      out.put("preTransform", pre);
+      out.put("postTransform", post);
+      out.put("sceneJson", scene.toString());
+      return out.toString();
+    } catch (Throwable t) {
+      return error("GC_R6AN_ENGINE_FAILED");
+    }
+  }
+
+  private static double risingActuatorLengthR6AK(double angleDeg,
+      double hingeX, double hingeY, double hingeZ, double planarAxisY,
+      double ay, double az, double radius, double mountY,
+      double rearX, double rearY, double rearZ) {
+    double th = Math.toRadians(angleDeg), c = Math.cos(th), s = Math.sin(th);
+    double dy = mountY - hingeY;
+    double r = radius * planarAxisY;
+    double x = hingeX + r * c - az * dy * s;
+    double y = hingeY + dy * c + az * r * s + ay * (ay * dy) * (1.0 - c);
+    double z = hingeZ - ay * r * s + az * (ay * dy) * (1.0 - c);
+    double dx = x - rearX, ddy = y - rearY, dz = z - rearZ;
+    return Math.sqrt(dx * dx + ddy * ddy + dz * dz);
+  }
+
+  private static double dualRisingActuatorLengthR6AL(double angleDeg,
+      double hx, double hy, double hz, double ay, double az,
+      double radius, double mountY, double supportX, double supportZ) {
+    double norm = Math.sqrt(ay * ay + az * az);
+    if (norm <= 1e-12) return Double.NaN;
+    double th = Math.toRadians(angleDeg), c = Math.cos(th), s = Math.sin(th);
+    double dy = mountY - hy;
+    double r = radius * (ay / norm);
+    double x = hx + r * c - az * dy * s;
+    double y = hy + dy * c + az * r * s + ay * (ay * dy) * (1.0 - c);
+    double z = hz - ay * r * s + az * (ay * dy) * (1.0 - c);
+    double dx = x - supportX, ddy = y - mountY, dz = z - supportZ;
+    return Math.sqrt(dx * dx + ddy * ddy + dz * dz);
+  }
+
+  private static double[] localZAxis(JSONObject t) {
+    double rx = Math.toRadians(t.optDouble("rotateX", 0.0));
+    double ry = Math.toRadians(t.optDouble("rotateY", 0.0));
+    double rz = Math.toRadians(t.optDouble("rotateZ", 0.0));
+    double cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry), cz = Math.cos(rz), sz = Math.sin(rz);
+    return new double[] { cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy };
+  }
