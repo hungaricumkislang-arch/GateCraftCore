@@ -38,11 +38,14 @@ jobs:
           from pathlib import Path
           p = Path('buildenv/src/com/gatecraft/cadengine/GateCraftCADEngine.java')
           s = p.read_text(encoding='utf-8')
-          frag = Path('cad_debloat/r6fk_d1/extra_r6ak_r6al_r6an.javafrag').read_text(encoding='utf-8')
+          frags = [
+            Path('cad_debloat/r6fk_d1/extra_r6ak_r6al_r6an.javafrag').read_text(encoding='utf-8'),
+            Path('cad_debloat/r6fk_d1/extra_r6an_selected.javafrag').read_text(encoding='utf-8'),
+          ]
           pos = s.rfind('}')
           if pos < 0:
               raise SystemExit('GateCraftCADEngine closing brace not found')
-          p.write_text(s[:pos] + '\n' + frag + '\n' + s[pos:], encoding='utf-8')
+          p.write_text(s[:pos] + '\n' + '\n'.join(frags) + '\n' + s[pos:], encoding='utf-8')
           PY
           find buildenv/src -type f -print
 
