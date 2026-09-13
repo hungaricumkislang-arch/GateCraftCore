@@ -41,6 +41,7 @@ jobs:
           frags = [
             Path('cad_debloat/r6fk_d1/extra_r6ak_r6al_r6an.javafrag').read_text(encoding='utf-8'),
             Path('cad_debloat/r6fk_d1/extra_r6an_selected.javafrag').read_text(encoding='utf-8'),
+            Path('cad_debloat/r6fk_d1/extra_r6s.javafrag').read_text(encoding='utf-8'),
           ]
           pos = s.rfind('}')
           if pos < 0:
