@@ -46,6 +46,7 @@ jobs:
             Path('cad_debloat/r6fk_d1/extra_r6ab_drive.javafrag').read_text(encoding='utf-8'),
             Path('cad_debloat/r6fk_d1/extra_r6ca_r6cb_plan.javafrag').read_text(encoding='utf-8'),
             Path('cad_debloat/r6fk_d1/extra_r6v.javafrag').read_text(encoding='utf-8'),
+            Path('cad_debloat/r6fk_d1/extra_r6x.javafrag').read_text(encoding='utf-8'),
           ]
           pos = s.rfind('}')
           if pos < 0:
