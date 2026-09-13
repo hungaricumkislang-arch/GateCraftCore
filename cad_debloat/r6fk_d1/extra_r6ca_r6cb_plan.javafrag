@@ -1,0 +1,136 @@
+
+  @SimpleFunction(description = "R6CA exact orthogonal two-profile common-plane miter plan. Read-only; existing GateCraftCAD miter kernel remains authoritative.")
+  public String MiterPlanR6CAJson(String multiSelectionJson, String sceneJson, double toleranceMm) {
+    try {
+      JSONObject multi = new JSONObject(multiSelectionJson == null ? "{}" : multiSelectionJson);
+      JSONArray ids = multi.optJSONArray("ids");
+      if (ids == null || ids.length() != 2) return error("GC_R6CA_SELECT_EXACTLY_2");
+      String idA = String.valueOf(ids.opt(0));
+      String idB = String.valueOf(ids.opt(1));
+      if (idA.length() == 0 || idB.length() == 0 || idA.equals(idB)) return error("GC_R6CA_SELECT_EXACTLY_2");
+
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      JSONObject a = findById(objects, idA), b = findById(objects, idB);
+      if (a == null || b == null) return error("GC_R6CA_OBJECT_MISSING");
+      JSONObject ma = a.optJSONObject("metadata"), mb = b.optJSONObject("metadata");
+      JSONObject ta = a.optJSONObject("transform"), tb = b.optJSONObject("transform");
+      String gate = validateMiterProfileR6CA(ma, ta, "A"); if (gate != null) return error(gate);
+      gate = validateMiterProfileR6CA(mb, tb, "B"); if (gate != null) return error(gate);
+
+      double[][] ba = miterBasisR6CA(ta), bb = miterBasisR6CA(tb);
+      double[] xa=ba[0], ya=ba[1], za=ba[2], xb=bb[0], yb=bb[1], zb=bb[2];
+      double axisDot = dot3R6CA(za, zb);
+      if (Math.abs(axisDot) > 0.002) return error("GC_R6CA_NOT_ORTHOGONAL");
+
+      double[] ca = centerR6CA(ta), cb = centerR6CA(tb);
+      double[] d = sub3R6CA(cb, ca);
+      int eA = dot3R6CA(d, za) >= 0.0 ? 1 : -1;
+      int eB = dot3R6CA(new double[]{-d[0],-d[1],-d[2]}, zb) >= 0.0 ? 1 : -1;
+      double[] pA = addScaledR6CA(ca, za, eA * ma.optDouble("cutLengthMm",0.0) * 0.5);
+      double[] pB = addScaledR6CA(cb, zb, eB * mb.optDouble("cutLengthMm",0.0) * 0.5);
+      double dist = distance(pA,pB);
+      if (dist > toleranceMm) return error("GC_R6CA_ENDPOINT_GAP");
+
+      double ax = dot3R6CA(zb, xa), ay = dot3R6CA(zb, ya);
+      double bx = dot3R6CA(za, xb), by = dot3R6CA(za, yb);
+      String slopeA; double alignA; double sizeA;
+      if (Math.abs(ax) >= 0.999 && Math.abs(ax) >= Math.abs(ay)) { slopeA="X"; alignA=ax; sizeA=ma.optDouble("widthMm",0.0); }
+      else if (Math.abs(ay) >= 0.999) { slopeA="Y"; alignA=ay; sizeA=ma.optDouble("heightMm",0.0); }
+      else return error("GC_R6CA_SLOPE_A_UNSUPPORTED");
+      String slopeB; double alignB; double sizeB;
+      if (Math.abs(bx) >= 0.999 && Math.abs(bx) >= Math.abs(by)) { slopeB="X"; alignB=bx; sizeB=mb.optDouble("widthMm",0.0); }
+      else if (Math.abs(by) >= 0.999) { slopeB="Y"; alignB=by; sizeB=mb.optDouble("heightMm",0.0); }
+      else return error("GC_R6CA_SLOPE_B_UNSUPPORTED");
+      if (Math.abs(sizeA-sizeB) > 0.1) return error("GC_R6CA_SECTION_MISMATCH");
+
+      int k = -eA * eB;
+      double angleA = 45.0 * k * (alignA >= 0.0 ? 1.0 : -1.0);
+      double angleB = 45.0 * k * (alignB >= 0.0 ? 1.0 : -1.0);
+      return miterPlanOutR6CA("gatecraft.r6ca.miter-plan.v1",idA,idB,eA,eB,slopeA,slopeB,angleA,angleB,dist,axisDot).toString();
+    } catch (Throwable t) { return error("GC_R6CA_ENGINE_FAILED"); }
+  }
+
+  @SimpleFunction(description = "R6CB arbitrary-angle exact planar common-plane miter plan. Read-only; existing GateCraftCAD miter kernel remains authoritative.")
+  public String MiterPlanR6CBJson(String multiSelectionJson, String sceneJson, double toleranceMm) {
+    try {
+      JSONObject multi = new JSONObject(multiSelectionJson == null ? "{}" : multiSelectionJson);
+      JSONArray ids = multi.optJSONArray("ids");
+      if (ids == null || ids.length() != 2) return error("GC_R6CB_SELECT_EXACTLY_2");
+      String idA = String.valueOf(ids.opt(0));
+      String idB = String.valueOf(ids.opt(1));
+      if (idA.length() == 0 || idB.length() == 0 || idA.equals(idB)) return error("GC_R6CB_SELECT_EXACTLY_2");
+
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      JSONObject a = findById(objects, idA), b = findById(objects, idB);
+      if (a == null || b == null) return error("GC_R6CB_OBJECT_MISSING");
+      JSONObject ma = a.optJSONObject("metadata"), mb = b.optJSONObject("metadata");
+      JSONObject ta = a.optJSONObject("transform"), tb = b.optJSONObject("transform");
+      String gate = validateMiterProfileR6CA(ma, ta, "A"); if (gate != null) return error(gate.replace("R6CA","R6CB"));
+      gate = validateMiterProfileR6CA(mb, tb, "B"); if (gate != null) return error(gate.replace("R6CA","R6CB"));
+
+      double[][] ba=miterBasisR6CA(ta), bb=miterBasisR6CA(tb);
+      double[] xa=ba[0], ya=ba[1], za=ba[2], xb=bb[0], yb=bb[1], zb=bb[2];
+      double[] ca=centerR6CA(ta), cb=centerR6CA(tb), d=sub3R6CA(cb,ca);
+      int eA=dot3R6CA(d,za)>=0.0?1:-1;
+      int eB=dot3R6CA(new double[]{-d[0],-d[1],-d[2]},zb)>=0.0?1:-1;
+      double[] pA=addScaledR6CA(ca,za,eA*ma.optDouble("cutLengthMm",0.0)*0.5);
+      double[] pB=addScaledR6CA(cb,zb,eB*mb.optDouble("cutLengthMm",0.0)*0.5);
+      double dist=distance(pA,pB);
+      if (dist>toleranceMm) return error("GC_R6CB_ENDPOINT_GAP");
+
+      double D=(eA*eB)*dot3R6CA(za,zb);
+      if (Math.abs(D)>=0.999847695) return error("GC_R6CB_NEAR_PARALLEL");
+      double S=Math.sqrt(Math.abs(1.0-D*D));
+
+      double ax=dot3R6CA(zb,xa), ay=dot3R6CA(zb,ya);
+      double bx=dot3R6CA(za,xb), by=dot3R6CA(za,yb);
+      double transA=Math.sqrt(ax*ax+ay*ay), transB=Math.sqrt(bx*bx+by*by);
+      if (transA<=1e-12 || transB<=1e-12) return error("GC_R6CB_TRANSVERSE_DEGENERATE");
+      String slopeA; double alignA; double hA;
+      if (Math.abs(ax)/transA>=0.999 && Math.abs(ax)>=Math.abs(ay)) { slopeA="X"; alignA=ax; hA=ma.optDouble("widthMm",0.0); }
+      else if (Math.abs(ay)/transA>=0.999) { slopeA="Y"; alignA=ay; hA=ma.optDouble("heightMm",0.0); }
+      else return error("GC_R6CB_OBLIQUE_A_UNSUPPORTED");
+      String slopeB; double alignB; double hB;
+      if (Math.abs(bx)/transB>=0.999 && Math.abs(bx)>=Math.abs(by)) { slopeB="X"; alignB=bx; hB=mb.optDouble("widthMm",0.0); }
+      else if (Math.abs(by)/transB>=0.999) { slopeB="Y"; alignB=by; hB=mb.optDouble("heightMm",0.0); }
+      else return error("GC_R6CB_OBLIQUE_B_UNSUPPORTED");
+
+      double denA=hA+hB*D, denB=hB+hA*D;
+      if (!(denA>0.0) || !(denB>0.0)) return error("GC_R6CB_BAD_DENOMINATOR");
+      double betaA=Math.toDegrees(Math.atan((hB*S)/denA));
+      double betaB=Math.toDegrees(Math.atan((hA*S)/denB));
+      if (Math.abs(betaA)>60.0 || Math.abs(betaB)>60.0) return error("GC_R6CB_ANGLE_LIMIT");
+      int k=-eA*eB;
+      double angleA=betaA*k*(alignA>=0.0?1.0:-1.0);
+      double angleB=betaB*k*(alignB>=0.0?1.0:-1.0);
+      return miterPlanOutR6CA("gatecraft.r6cb.miter-plan.v1",idA,idB,eA,eB,slopeA,slopeB,angleA,angleB,dist,D).toString();
+    } catch (Throwable t) { return error("GC_R6CB_ENGINE_FAILED"); }
+  }
+
+  private static String validateMiterProfileR6CA(JSONObject m, JSONObject t, String side) {
+    if (m==null || t==null) return "GC_R6CA_PROFILE_"+side+"_MISSING";
+    if (!"Z".equalsIgnoreCase(m.optString("lengthAxis",""))) return "GC_R6CA_PROFILE_"+side+"_AXIS";
+    if (!(m.optDouble("cutLengthMm",0.0)>0.0) || !(m.optDouble("widthMm",0.0)>0.0) || !(m.optDouble("heightMm",0.0)>0.0)) return "GC_R6CA_PROFILE_"+side+"_DIM";
+    if (Math.abs(t.optDouble("scaleX",1.0)-1.0)>0.001 || Math.abs(t.optDouble("scaleY",1.0)-1.0)>0.001 || Math.abs(t.optDouble("scaleZ",1.0)-1.0)>0.001) return "GC_R6CA_PROFILE_"+side+"_SCALE";
+    return null;
+  }
+  private static double[][] miterBasisR6CA(JSONObject t) {
+    double rx=Math.toRadians(t.optDouble("rotateX",0.0)), ry=Math.toRadians(t.optDouble("rotateY",0.0)), rz=Math.toRadians(t.optDouble("rotateZ",0.0));
+    double cx=Math.cos(rx), sx=Math.sin(rx), cy=Math.cos(ry), sy=Math.sin(ry), cz=Math.cos(rz), sz=Math.sin(rz);
+    double[] x=new double[]{cy*cz,cy*sz,-sy};
+    double[] y=new double[]{sy*sx*cz-cx*sz,sy*sx*sz+cx*cz,cy*sx};
+    double[] z=new double[]{cx*sy*cz+sx*sz,cx*sy*sz-sx*cz,cx*cy};
+    return new double[][]{x,y,z};
+  }
+  private static double dot3R6CA(double[] a,double[] b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+  private static double[] centerR6CA(JSONObject t){return new double[]{t.optDouble("x",0.0),t.optDouble("y",0.0),t.optDouble("z",0.0)};}
+  private static double[] sub3R6CA(double[] a,double[] b){return new double[]{a[0]-b[0],a[1]-b[1],a[2]-b[2]};}
+  private static double[] addScaledR6CA(double[] a,double[] v,double s){return new double[]{a[0]+v[0]*s,a[1]+v[1]*s,a[2]+v[2]*s};}
+  private static JSONObject miterPlanOutR6CA(String schema,String idA,String idB,int eA,int eB,String slopeA,String slopeB,double angleA,double angleB,double dist,double axisDot) throws Exception {
+    JSONObject o=new JSONObject(); o.put("ok",true); o.put("schema",schema); o.put("idA",idA); o.put("idB",idB);
+    o.put("endA",eA>0?"END":"START"); o.put("endB",eB>0?"END":"START");
+    o.put("slopeAxisA",slopeA); o.put("slopeAxisB",slopeB); o.put("angleA",angleA); o.put("angleB",angleB);
+    o.put("distanceMm",dist); o.put("axisDot",axisDot); return o;
+  }
