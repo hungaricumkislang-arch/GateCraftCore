@@ -1,0 +1,90 @@
+
+  @SimpleFunction(description = "R6X selective telescope swept-AABB safety. Exact port of existing Blockly broad-phase; patches only same-gate TEL_MOTOR safety metadata.")
+  public String TelescopicSafetyR6XJson(String gateId, String sceneJson, String boundsJson) {
+    try {
+      final double clearance = 10.0;
+      final double margin = 0.5;
+      String gid = gateId == null ? "" : gateId;
+      if (gid.length() == 0 || "0".equals(gid) || "-1".equals(gid)) return error("GC_R6X_BAD_GATE");
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONObject boundsDoc = new JSONObject(boundsJson == null ? "{}" : boundsJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      JSONArray bounds = boundsDoc.optJSONArray("objects");
+      if (objects == null || bounds == null) return error("GC_R6X_SCENE_OR_BOUNDS_MISSING");
+
+      java.util.HashMap<String,String> gateMap = new java.util.HashMap<String,String>();
+      java.util.HashMap<String,String> asmMap = new java.util.HashMap<String,String>();
+      String gateAsm = "", supportId = "", motorId = "";
+      JSONObject motor = null;
+      for (int i=0;i<objects.length();i++) {
+        JSONObject o=objects.optJSONObject(i); if(o==null) continue;
+        String id=o.optString("id",""); JSONObject m=o.optJSONObject("metadata"); if(m==null)m=new JSONObject();
+        gateMap.put(id,String.valueOf(m.opt("gcTelGateId")));
+        asmMap.put(id,m.optString("assembly",""));
+        if ("TELESCOPIC_LEAF".equals(o.optString("type","")) && sameId(m.opt("gcTelGateId"),gid) && gateAsm.length()==0) gateAsm=m.optString("assembly","");
+        if (sameId(m.opt("gcTelGateId"),gid) && "GUIDE".equals(m.optString("gcTelHwRole",""))) supportId=m.optString("parentId","");
+        if (sameId(m.opt("gcTelGateId"),gid) && "TEL_MOTOR".equals(m.optString("gcTelHwRole",""))) { motor=o; motorId=id; }
+      }
+
+      double safeMax=100.0; String limiterId="", limiterPart=""; int movingCount=0;
+      for (int i=0;i<objects.length();i++) {
+        JSONObject mov=objects.optJSONObject(i); if(mov==null) continue;
+        JSONObject mm=mov.optJSONObject("metadata"); if(mm==null) continue;
+        boolean leaf="TELESCOPIC_LEAF".equals(mov.optString("type","")) && sameId(mm.opt("gcTelGateId"),gid);
+        boolean carriage=sameId(mm.opt("gcTelGateId"),gid) && "CARRIAGE".equals(mm.optString("gcTelHwRole",""));
+        if(!leaf && !carriage) continue;
+        String movId=mov.optString("id","");
+        double closedX=leaf?mm.optDouble("gcTelClosedX",0.0):mm.optDouble("gcTelClosedX",0.0)+mm.optDouble("gcTelAttachDX",0.0);
+        double openX=leaf?mm.optDouble("gcTelOpenX",0.0):mm.optDouble("gcTelOpenX",0.0)+mm.optDouble("gcTelAttachDX",0.0);
+        JSONObject mt=mov.optJSONObject("transform"); double curX=mt==null?0.0:mt.optDouble("x",0.0);
+        double travel=openX-closedX;
+        String part=leaf?"LEAF":"CARRIAGE";
+        JSONObject mb=findById(bounds,movId);
+        if(mb==null) continue;
+        double[] min=vec3(mb.optJSONArray("min")), max=vec3(mb.optJSONArray("max"));
+        if(min==null || max==null || Math.abs(travel)<=1e-6) continue;
+
+        for(int j=0;j<bounds.length();j++) {
+          JSONObject obs=bounds.optJSONObject(j); if(obs==null) continue;
+          String fixedId=obs.optString("id","");
+          double[] fmin=vec3(obs.optJSONArray("min")), fmax=vec3(obs.optJSONArray("max"));
+          if(fmin==null || fmax==null) continue;
+          String fixedGate=gateMap.containsKey(fixedId)?gateMap.get(fixedId):"-999999";
+          String fixedAsm=asmMap.containsKey(fixedId)?asmMap.get(fixedId):"";
+          boolean sameAsm=gateAsm.length()>0 && gateAsm.equals(fixedAsm);
+          if(fixedId.equals(movId) || sameId(fixedGate,gid) || fixedId.equals(supportId) || sameAsm) continue;
+          boolean yz=(max[1]+clearance>fmin[1]) && (min[1]-clearance<fmax[1]) && (max[2]+clearance>fmin[2]) && (min[2]-clearance<fmax[2]);
+          if(!yz) continue;
+          double closedShift=closedX-curX;
+          double candidate;
+          if(travel>0.0) {
+            if(fmax[0]+clearance <= min[0]+closedShift) candidate=101.0;
+            else if(fmin[0]-clearance <= max[0]+closedShift) candidate=0.0;
+            else {
+              double dist=(fmin[0]-clearance)-(max[0]+closedShift);
+              candidate=(Math.max(dist-margin,0.0)/Math.abs(travel))*100.0;
+            }
+          } else {
+            if(fmin[0]-clearance >= max[0]+closedShift) candidate=101.0;
+            else if(fmax[0]+clearance >= min[0]+closedShift) candidate=0.0;
+            else {
+              double dist=(min[0]+closedShift)-(fmax[0]+clearance);
+              candidate=(Math.max(dist-margin,0.0)/Math.abs(travel))*100.0;
+            }
+          }
+          if(candidate>=0.0 && candidate<=100.0 && candidate<safeMax) { safeMax=candidate; limiterId=fixedId; limiterPart=part; }
+        }
+        movingCount++;
+      }
+      if(motor==null || movingCount<=0) return error("GC_R6X_MOTOR_OR_MOVING_SET_REQUIRED");
+      JSONObject meta=motor.optJSONObject("metadata"); if(meta==null){meta=new JSONObject();motor.put("metadata",meta);}
+      meta.put("gcTelSafeMaxPercent",safeMax);
+      meta.put("gcTelSafeClearanceMm",clearance);
+      meta.put("gcTelSafeLimiterId",limiterId);
+      meta.put("gcTelSafeLimiterPart",limiterPart);
+      meta.put("gcTelSafeSchema","R6X_SELECTIVE_SWEEP_AABB");
+      JSONObject out=new JSONObject(); out.put("ok",true); out.put("schema","gatecraft.r6x.tel-safe.v1");
+      out.put("sceneJson",scene.toString()); out.put("safeMaxPercent",safeMax); out.put("limiterId",limiterId); out.put("limiterPart",limiterPart); out.put("movingCount",movingCount); out.put("motorId",motorId);
+      return out.toString();
+    } catch(Throwable t){ return error("GC_R6X_ENGINE_FAILED"); }
+  }
