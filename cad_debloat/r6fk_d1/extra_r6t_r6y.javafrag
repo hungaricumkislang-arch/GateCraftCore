@@ -1,0 +1,246 @@
+
+  @SimpleFunction(description = "R6T exact telescopic setup. Returns result JSON with patched sceneJson and normalized gate fields.")
+  public String TelescopicSetupR6TJson(String selectedId, String saveJson, String sceneJson, String boundsJson) {
+    try {
+      String gid = selectedId == null ? "" : selectedId;
+      if (gid.length() == 0 || "0".equals(gid) || "-1".equals(gid)) return error("GC_R6T_NO_SELECTION");
+      JSONObject save = new JSONObject(saveJson == null ? "{}" : saveJson);
+      JSONObject gate = findByIdString(save.optJSONArray("objects"), gid);
+      if (gate == null) return error("GC_R6T_NATIVE_NOT_FOUND");
+      if (!"TELESCOPIC_GATE".equals(gate.optString("type", ""))) return error("GC_R6T_WRONG_TYPE");
+      double x1 = gate.optDouble("x1", 0.0), x2 = gate.optDouble("x2", 0.0);
+      double left = Math.min(x1, x2), right = Math.max(x1, x2);
+      double opening = gate.optDouble("openingWidth", 0.0);
+      if (opening <= 0.0) opening = right - left;
+      int count = gate.optInt("panelCount", 0);
+      double overlap = gate.optDouble("overlap", 0.0);
+      String direction = gate.optString("direction", "RIGHT");
+      if (count < 2 || count > 8) return error("GC_R6T_BAD_COUNT");
+      if (!(opening > 0.0) || overlap < 0.0 || !(overlap < opening / count)) return error("GC_R6T_BAD_GEOMETRY");
+      double leafWidth = (opening + (count - 1) * overlap) / count;
+      double pitch = leafWidth - overlap;
+
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      JSONObject bounds = new JSONObject(boundsJson == null ? "{}" : boundsJson);
+      JSONArray boundObjects = bounds.optJSONArray("objects");
+      int found = 0;
+      for (int i = 0; i < count; i++) {
+        JSONObject leaf = findTypedLinkedBySuffix(objects, "TELESCOPIC_LEAF", gid, "_leaf_" + i, "legacySourceId");
+        if (leaf == null) continue;
+        JSONObject tr = ensureObject(leaf, "transform");
+        JSONObject meta = ensureObject(leaf, "metadata");
+        String id = String.valueOf(leaf.opt("id"));
+        JSONObject bo = findByIdString(boundObjects, id);
+        if (bo == null) continue;
+        double[] mn = vec3(bo.optJSONArray("min"));
+        double[] mx = vec3(bo.optJSONArray("max"));
+        if (mn == null || mx == null) continue;
+        double curWidth = mx[0] - mn[0];
+        double closedX = left + leafWidth * 0.5 + i * pitch;
+        double openX;
+        if ("RIGHT".equals(direction)) {
+          openX = right + leafWidth * 0.5 + i * overlap;
+        } else {
+          openX = left - (leafWidth * 0.5 + ((count - 1) - i) * overlap);
+        }
+        double curScaleX = tr.optDouble("scaleX", 1.0);
+        double newScaleX = curWidth > 0.001 ? curScaleX * (leafWidth / curWidth) : curScaleX;
+        tr.put("x", closedX);
+        tr.put("scaleX", newScaleX);
+        meta.put("gcTelGateId", gate.opt("id"));
+        meta.put("gcTelIndex", i);
+        meta.put("gcTelClosedX", closedX);
+        meta.put("gcTelOpenX", openX);
+        meta.put("gcTelLeafWidth", leafWidth);
+        meta.put("gcTelOverlap", overlap);
+        meta.put("gcTelDirection", direction);
+        found++;
+      }
+      if (found != count) {
+        JSONObject e = errorObject("GC_R6T_LINKED_LEAVES_MISSING");
+        e.put("foundCount", found); e.put("expectedCount", count); return e.toString();
+      }
+      JSONObject out = new JSONObject();
+      out.put("ok", true);
+      out.put("schema", "gatecraft.r6t.tel-setup.v1");
+      out.put("gateId", gate.opt("id"));
+      out.put("count", count);
+      out.put("opening", opening);
+      out.put("overlap", overlap);
+      out.put("direction", direction);
+      out.put("left", left);
+      out.put("right", right);
+      out.put("leafWidth", leafWidth);
+      out.put("pitch", pitch);
+      out.put("sceneJson", scene.toString());
+      return out.toString();
+    } catch (Throwable t) { return error("GC_R6T_ENGINE_FAILED"); }
+  }
+
+  @SimpleFunction(description = "R6Y exact folding setup. Returns result JSON with patched sceneJson and normalized gate fields.")
+  public String FoldingSetupR6YJson(String selectedId, String saveJson, String sceneJson) {
+    try {
+      String gid = selectedId == null ? "" : selectedId;
+      if (gid.length() == 0 || "0".equals(gid) || "-1".equals(gid)) return error("GC_R6Y_NO_SELECTION");
+      JSONObject save = new JSONObject(saveJson == null ? "{}" : saveJson);
+      JSONObject gate = findByIdString(save.optJSONArray("objects"), gid);
+      if (gate == null) return error("GC_R6Y_NATIVE_NOT_FOUND");
+      if (!"FOLDING_GATE".equals(gate.optString("type", ""))) return error("GC_R6Y_WRONG_TYPE");
+      double x1 = gate.optDouble("x1", 0.0), x2 = gate.optDouble("x2", 0.0);
+      double left = Math.min(x1, x2), right = Math.max(x1, x2);
+      double opening = gate.optDouble("openingWidth", 0.0);
+      if (opening <= 0.0) opening = right - left;
+      int count = gate.optInt("panelCount", 0);
+      if (!(count == 2 || count == 4 || count == 6 || count == 8)) return error("GC_R6Y_BAD_COUNT");
+      if (!(opening > 0.0)) return error("GC_R6Y_BAD_OPENING");
+      double overlap = gate.optDouble("overlap", 0.0);
+      String direction = gate.optString("direction", "RIGHT");
+      double openAngle = gate.optDouble("openAngle", 0.0);
+      double panelLen = opening / count;
+      int dirSign = "RIGHT".equals(direction) ? 1 : -1;
+
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      JSONObject p0 = findTypedLinkedBySuffix(objects, "FOLDING_PANEL", gid, "_panel_0", "legacySourceId");
+      if (p0 == null) return error("GC_R6Y_BASE_PANEL_MISSING");
+      JSONArray base = p0.optJSONArray("baseTransform");
+      if (base == null || base.length() < 5) return error("GC_R6Y_BASE_TRANSFORM_MISSING");
+      double baseZ = base.optDouble(2, 0.0);
+      double baseRy = base.optDouble(4, 0.0) * 57.29577951308232 - openAngle;
+      double c = Math.cos(Math.toRadians(baseRy)), s = Math.sin(Math.toRadians(baseRy));
+      int found = 0;
+      for (int i = 0; i < count; i++) {
+        JSONObject panel = findTypedLinkedBySuffix(objects, "FOLDING_PANEL", gid, "_panel_" + i, "legacySourceId");
+        if (panel == null) continue;
+        JSONObject tr = ensureObject(panel, "transform");
+        JSONObject meta = ensureObject(panel, "metadata");
+        double d = panelLen * (i + 0.5);
+        tr.put("x", left + d * c);
+        tr.put("z", baseZ - d * s);
+        tr.put("rotateY", baseRy);
+        meta.put("gcFoldGateId", gate.opt("id"));
+        meta.put("gcFoldIndex", i);
+        meta.put("gcFoldPanelLength", panelLen);
+        meta.put("gcFoldDirectionSign", dirSign);
+        meta.put("gcFoldMaxAngleDeg", 85.0);
+        meta.put("gcFoldNativeOverlap", overlap);
+        meta.put("gcFoldBaseZ", baseZ);
+        meta.put("gcFoldBaseRotateY", baseRy);
+        meta.put("gcFoldSchema", "R6Y_CHAINED_FOLDING");
+        meta.put("gcFoldCurrentPercent", 0.0);
+        found++;
+      }
+      if (found != count) {
+        JSONObject e = errorObject("GC_R6Y_LINKED_PANELS_MISSING");
+        e.put("foundCount", found); e.put("expectedCount", count); return e.toString();
+      }
+      JSONObject out = new JSONObject();
+      out.put("ok", true);
+      out.put("schema", "gatecraft.r6y.fold-setup.v1");
+      out.put("gateId", gate.opt("id"));
+      out.put("count", count);
+      out.put("opening", opening);
+      out.put("overlap", overlap);
+      out.put("direction", direction);
+      out.put("dirSign", dirSign);
+      out.put("left", left);
+      out.put("right", right);
+      out.put("panelLength", panelLen);
+      out.put("baseZ", baseZ);
+      out.put("baseRotateY", baseRy);
+      out.put("sceneJson", scene.toString());
+      return out.toString();
+    } catch (Throwable t) { return error("GC_R6Y_ENGINE_FAILED"); }
+  }
+
+  @SimpleFunction(description = "R6Y exact folding drive and R6Z hardware sync. Returns patched sceneJson and clamped percent.")
+  public String FoldingDriveR6YJson(String gateId, String sceneJson, double requestedPercent) {
+    try {
+      String gid = gateId == null ? "" : gateId;
+      JSONObject scene = new JSONObject(sceneJson == null ? "{}" : sceneJson);
+      JSONArray objects = scene.optJSONArray("objects");
+      JSONObject p0 = findFoldPanel(objects, gid, 0);
+      if (p0 == null) return error("GC_R6Y_SETUP_REQUIRED");
+      JSONObject m0 = p0.optJSONObject("metadata");
+      int count = 0;
+      for (int i = 0; i < 8; i++) if (findFoldPanel(objects, gid, i) != null) count++; else break;
+      if (!(count == 2 || count == 4 || count == 6 || count == 8)) return error("GC_R6Y_LINKED_PANELS_MISSING");
+      double panelLen = m0.optDouble("gcFoldPanelLength", 0.0);
+      double baseZ = m0.optDouble("gcFoldBaseZ", 0.0);
+      double baseRy = m0.optDouble("gcFoldBaseRotateY", 0.0);
+      int dirSign = m0.optInt("gcFoldDirectionSign", 1);
+      JSONObject tr0 = p0.optJSONObject("transform");
+      double left = tr0 == null ? 0.0 : tr0.optDouble("x", 0.0) - Math.cos(Math.toRadians(baseRy)) * panelLen * 0.5;
+      double safe = m0.optDouble("gcFoldSafeMaxPercent", 100.0);
+      double pct = Math.max(0.0, Math.min(requestedPercent, safe));
+      double anchorX = left, anchorZ = baseZ;
+      for (int i = 0; i < count; i++) {
+        JSONObject panel = findFoldPanel(objects, gid, i);
+        JSONObject tr = ensureObject(panel, "transform");
+        JSONObject meta = ensureObject(panel, "metadata");
+        double sign = (i % 2 == 0) ? 1.0 : -1.0;
+        double angle = baseRy + sign * dirSign * (85.0 * pct / 100.0);
+        double c = Math.cos(Math.toRadians(angle)), s = Math.sin(Math.toRadians(angle));
+        double centerX = anchorX + c * panelLen * 0.5;
+        double centerZ = anchorZ - s * panelLen * 0.5;
+        tr.put("x", centerX); tr.put("z", centerZ); tr.put("rotateY", angle);
+        meta.put("gcFoldCurrentPercent", pct);
+        anchorX += c * panelLen; anchorZ -= s * panelLen;
+      }
+      if (objects != null) {
+        for (int i = 0; i < objects.length(); i++) {
+          JSONObject hw = objects.optJSONObject(i); if (hw == null) continue;
+          JSONObject hm = hw.optJSONObject("metadata"); if (hm == null) continue;
+          if (!sameId(hm.opt("gcFoldGateId"), gid)) continue;
+          String role = hm.optString("gcFoldHwRole", "");
+          if (!("CENTER_HINGE".equals(role) || "LINKAGE".equals(role))) continue;
+          int joint = hm.optInt("gcFoldJointIndex", -1);
+          if (joint < 0 || joint >= count) continue;
+          JSONObject panel = findFoldPanel(objects, gid, joint); if (panel == null) continue;
+          JSONObject pt = panel.optJSONObject("transform"); if (pt == null) continue;
+          double a = pt.optDouble("rotateY", 0.0);
+          JSONObject ht = ensureObject(hw, "transform");
+          ht.put("x", pt.optDouble("x", 0.0) + Math.cos(Math.toRadians(a)) * panelLen * 0.5);
+          ht.put("z", pt.optDouble("z", 0.0) - Math.sin(Math.toRadians(a)) * panelLen * 0.5);
+          ht.put("rotateY", a);
+        }
+      }
+      JSONObject out = new JSONObject();
+      out.put("ok", true); out.put("schema", "gatecraft.r6y.fold-drive.v1");
+      out.put("percent", pct); out.put("count", count); out.put("sceneJson", scene.toString());
+      return out.toString();
+    } catch (Throwable t) { return error("GC_R6Y_DRIVE_ENGINE_FAILED"); }
+  }
+
+  private static JSONObject ensureObject(JSONObject parent, String key) throws Exception {
+    JSONObject o = parent.optJSONObject(key); if (o == null) { o = new JSONObject(); parent.put(key, o); } return o;
+  }
+  private static boolean sameId(Object value, String id) {
+    return value != null && id != null && id.equals(String.valueOf(value));
+  }
+  private static JSONObject findByIdString(JSONArray objects, String id) {
+    if (objects == null) return null;
+    for (int i = 0; i < objects.length(); i++) {
+      JSONObject o = objects.optJSONObject(i); if (o != null && sameId(o.opt("id"), id)) return o;
+    }
+    return null;
+  }
+  private static JSONObject findTypedLinkedBySuffix(JSONArray objects, String type, String gateId, String suffix, String linkKey) {
+    if (objects == null) return null;
+    for (int i = 0; i < objects.length(); i++) {
+      JSONObject o = objects.optJSONObject(i); if (o == null || !type.equals(o.optString("type", ""))) continue;
+      JSONObject m = o.optJSONObject("metadata"); if (m == null || !sameId(m.opt(linkKey), gateId)) continue;
+      String id = String.valueOf(o.opt("id")); if (id.contains(suffix)) return o;
+    }
+    return null;
+  }
+  private static JSONObject findFoldPanel(JSONArray objects, String gateId, int index) {
+    if (objects == null) return null;
+    for (int i = 0; i < objects.length(); i++) {
+      JSONObject o = objects.optJSONObject(i); if (o == null || !"FOLDING_PANEL".equals(o.optString("type", ""))) continue;
+      JSONObject m = o.optJSONObject("metadata"); if (m == null) continue;
+      if (sameId(m.opt("gcFoldGateId"), gateId) && m.optInt("gcFoldIndex", -1) == index) return o;
+    }
+    return null;
+  }
