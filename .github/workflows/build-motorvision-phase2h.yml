@@ -38,8 +38,13 @@ jobs:
       - name: Dependency gates
         run: |
           test -f /tmp/mvdeps/deps/text-recognition-16.0.1.aar
-          ! find /tmp/mvdeps/deps -type f -printf '%f\n' | grep '^play-services-mlkit-text-recognition'
+          test -f /tmp/mvdeps/deps/text-recognition-bundled-common-17.0.0.aar
           test -n "$(find /tmp/mvdeps/deps -type f | head -1)"
+          # The bundled artifact legitimately has Google Play Services support libraries transitively.
+          # Reject only the unbundled OCR as the ROOT dependency; verify root from the generated POM.
+          grep -q '<artifactId>text-recognition</artifactId>' /tmp/mvdeps/pom.xml
+          ! grep -q '<artifactId>play-services-mlkit-text-recognition</artifactId>' /tmp/mvdeps/pom.xml
+          du -sh /tmp/mvdeps/deps
       - uses: actions/upload-artifact@v4
         with:
           name: MotorVision-Phase2H-resolved-dependencies
