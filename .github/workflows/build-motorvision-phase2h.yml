@@ -532,7 +532,7 @@ jobs:
           old={'BestControllerId','BestScore','CleanOcrText','ControllerCount','DatabaseVersion','IdentifyFromOcrText','IdentifyFromText','IndexLoaded','LanguageCode','LanguageIndex','LastError','LoadControllerIndex','NormalizeText','Schema','SetLanguageCode','SetLanguageIndex','SetTheme','Theme','ThemeBackButtonImage','ThemeBackgroundImage','ThemeButtonImage','ThemeTextColor','TopMatchesJson','UiText','Version'}
           assert old.issubset(methods), sorted(old-methods)
           assert {'RecognizeImage','RecognizeAndIdentifyImage','LoadControllerIndexAsset','LoadDefaultControllerIndex','MatchCount','TopMatchIdList','TopMatchDisplayList','OcrBusy','CloseOcr'}.issubset(methods)
-          assert comp.get('version')==6, comp.get('version')
+          assert str(comp.get('version'))=='6', comp.get('version')
           assert events.get('OcrRecognized')==2, events
           assert events.get('OcrFailed')==1, events
           assert events.get('ImageIdentified')==5, events
