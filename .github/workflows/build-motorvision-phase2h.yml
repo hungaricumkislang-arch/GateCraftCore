@@ -278,6 +278,7 @@ jobs:
             'text-recognition-16.0.1.aar',
             'text-recognition-bundled-common-17.0.0.aar',
             'vision-common-17.3.0.aar',
+            'exifinterface-1.0.0.aar',
           ]
           for n in selected:
               assert os.path.exists(os.path.join(deps,n)), n
@@ -337,7 +338,8 @@ jobs:
           assert not class_conflicts, class_conflicts[:20]
           assert asset_count>0, 'OCR model assets missing'
           assert native_abis=={'arm64-v8a','armeabi-v7a'}, native_abis
-          assert not any(x.startswith('androidx/') for x in entries), 'AndroidX classes must come from App Inventor runtime'
+          packaged_androidx=sorted(x for x in entries if x.startswith('androidx/'))
+          assert all(x.startswith('androidx/exifinterface/') for x in packaged_androidx), packaged_androidx[:20]
           assert not any(x.startswith('kotlin/') for x in entries), 'Kotlin runtime must not be bundled'
           activity_refs=[n for n,d in entries.items() if n.endswith('.class') and b'androidx/activity' in d]
           assert not activity_refs, activity_refs[:20]
@@ -375,6 +377,47 @@ jobs:
           test -n "$(unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar | grep 'jni/arm64-v8a/libmlkit_google_ocr_pipeline.so')"
           test -n "$(unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar | grep 'jni/armeabi-v7a/libmlkit_google_ocr_pipeline.so')"
           ! unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar | grep -q 'jni/x86'
+      - name: Audit OCR runtime references against App Inventor support set
+        run: |
+          python3 - <<'PY'
+          import zipfile,glob,os,re,io,json
+          available=set()
+          def add_jar_bytes(data):
+              with zipfile.ZipFile(io.BytesIO(data)) as z:
+                  for n in z.namelist():
+                      if n.endswith('.class'):
+                          available.add(n[:-6])
+          for p in glob.glob('/tmp/aitemplate/lib/appinventor/*.jar'):
+              try:
+                  with zipfile.ZipFile(p) as z:
+                      for n in z.namelist():
+                          if n.endswith('.class'):
+                              available.add(n[:-6])
+              except zipfile.BadZipFile:
+                  pass
+          for p in glob.glob('/tmp/aitemplate/lib/appinventor/*.aar'):
+              try:
+                  with zipfile.ZipFile(p) as a:
+                      if 'classes.jar' in a.namelist():
+                          add_jar_bytes(a.read('classes.jar'))
+              except zipfile.BadZipFile:
+                  pass
+          runtime='/tmp/mvruntime/aar/classes.jar'
+          with zipfile.ZipFile(runtime) as z:
+              runtime_classes={n[:-6] for n in z.namelist() if n.endswith('.class')}
+              available.update(runtime_classes)
+              refs=set()
+              pat=re.compile(rb'(?:androidx|kotlin)/[A-Za-z0-9_$/]+')
+              for n in z.namelist():
+                  if n.endswith('.class'):
+                      for m in pat.findall(z.read(n)):
+                          refs.add(m.decode('ascii','ignore'))
+          missing=sorted(x for x in refs if x not in available and not x.startswith('androidx/annotation/'))
+          report={'support_refs':len(refs),'runtime_classes':len(runtime_classes),'missing':missing}
+          open('/tmp/mvruntime/support-reference-audit.json','w').write(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          assert not missing, missing[:50]
+          PY
       - name: Compile isolated OCR bridge against resolved payload
         run: |
           ANDROID_JAR=$(find "$ANDROID_HOME/platforms" -name android.jar | sort -V | tail -1)
@@ -409,6 +452,59 @@ jobs:
           AIX=$(find . -type f -name '*.aix' | head -1)
           test -n "$AIX"
           cp "$AIX" /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix
+          unzip -t /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix
+          unzip -l /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix > /tmp/motorvision-aix-list.txt
+      - name: Finalize Phase2K AIX package contract
+        run: |
+          python3 - <<'PY'
+          import zipfile,json,os,tempfile,shutil
+          src='/tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix'
+          runtime='/tmp/mvruntime/motorvision-ocr-runtime.aar'
+          work='/tmp/mvfinal'
+          shutil.rmtree(work,ignore_errors=True)
+          os.makedirs(work)
+          with zipfile.ZipFile(src) as z:
+              z.extractall(work)
+          roots=[x for x in os.listdir(work) if os.path.isdir(os.path.join(work,x))]
+          assert roots==['com.gatecraft.motorvision'], roots
+          root=os.path.join(work,roots[0])
+          os.makedirs(os.path.join(root,'aars'),exist_ok=True)
+          shutil.copy2(runtime,os.path.join(root,'aars','motorvision-ocr-runtime.aar'))
+
+          service=(
+            '    <service android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService" '
+            'android:directBootAware="true" android:exported="false">\n'
+            '      <meta-data android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar" '
+            'android:value="com.google.firebase.components.ComponentRegistrar"/>\n'
+            '      <meta-data android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar" '
+            'android:value="com.google.firebase.components.ComponentRegistrar"/>\n'
+            '      <meta-data android:name="com.google.firebase.components:com.google.mlkit.vision.text.internal.TextRegistrar" '
+            'android:value="com.google.firebase.components.ComponentRegistrar"/>\n'
+            '    </service>\n'
+          )
+          metadata='      <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="ocr"/>\n'
+
+          for name in ['component_build_info.json','component_build_infos.json']:
+              p=os.path.join(root,'files',name)
+              obj=json.load(open(p,encoding='utf-8'))
+              rows=obj if isinstance(obj,list) else [obj]
+              assert len(rows)==1, (name,len(rows))
+              row=rows[0]
+              row['libraries']=['motorvision-ocr-runtime.aar']
+              row['permissions']=[]
+              row['services']=[service]
+              row['metadata']=[metadata]
+              out=rows if isinstance(obj,list) else row
+              with open(p,'w',encoding='utf-8',newline='\n') as f:
+                  json.dump(out,f,ensure_ascii=False,separators=(',',':'))
+          tmp=src+'.new'
+          with zipfile.ZipFile(tmp,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for base,dirs,files in os.walk(work):
+                  for f in sorted(files):
+                      p=os.path.join(base,f)
+                      z.write(p,os.path.relpath(p,work))
+          os.replace(tmp,src)
+          PY
           unzip -t /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix
           unzip -l /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix > /tmp/motorvision-aix-list.txt
       - name: Audit Phase2K AIX contract
@@ -462,6 +558,7 @@ jobs:
             /tmp/mvcompat/activity-audit.txt
             /tmp/mvpayload/**
             /tmp/mvruntime/**
+            /tmp/mvruntime/support-reference-audit.json
             /tmp/motorvision-phase2k-audit.json
             /tmp/mvpayload-coupling.txt
             /tmp/motorvision-manifest-policy.txt
