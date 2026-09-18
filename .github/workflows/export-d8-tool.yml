@@ -1,4 +1,4 @@
-name: Export Android D8 tool
+name: Export exact D8 9.4.17
 on:
   push:
     branches: [ tmp-unused ]
@@ -10,17 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Collect latest D8
+      - name: Download exact R8/D8 9.4.17
         run: |
-          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          echo "BUILD_TOOLS=$BT"
-          mkdir -p /tmp/d8tool
-          cp "$BT/d8" /tmp/d8tool/
-          if [ -f "$BT/lib/d8.jar" ]; then cp "$BT/lib/d8.jar" /tmp/d8tool/; fi
-          if [ -f "$BT/lib/d8.jar" ]; then sha256sum "$BT/lib/d8.jar"; fi
-          ls -lh /tmp/d8tool
+          mkdir -p /tmp/d8exact
+          curl -L --fail --retry 3 -o /tmp/d8exact/r8.jar https://storage.googleapis.com/r8-releases/raw/9.4.17/r8.jar
+          java -cp /tmp/d8exact/r8.jar com.android.tools.r8.D8 --version
+          sha256sum /tmp/d8exact/r8.jar
       - uses: actions/upload-artifact@v4
         with:
-          name: android-d8-tool
-          path: /tmp/d8tool/*
+          name: d8-9.4.17-exact
+          path: /tmp/d8exact/r8.jar
           if-no-files-found: error
