@@ -250,11 +250,136 @@ jobs:
           assert arm64, 'No arm64-v8a native library found'
           PY
           du -sh /tmp/mvpayload
+      - name: Build sanitized offline OCR runtime AAR
+        run: |
+          rm -rf /tmp/mvruntime
+          mkdir -p /tmp/mvruntime/compile-jars /tmp/mvruntime/aar/assets /tmp/mvruntime/aar/jni /tmp/mvruntime/merged
+          python3 - <<'PY'
+          import zipfile,glob,os,io,shutil,hashlib,json
+          deps='/tmp/mvcompat/deps'
+          compile_dir='/tmp/mvruntime/compile-jars'
+          selected=[
+            'play-services-base-18.1.0.aar',
+            'play-services-basement-18.1.0.aar',
+            'play-services-tasks-18.0.2.aar',
+            'play-services-mlkit-text-recognition-19.0.1.aar',
+            'play-services-mlkit-text-recognition-common-19.1.0.aar',
+            'image-1.0.0-beta1.aar',
+            'vision-interfaces-16.3.0.aar',
+            'common-18.11.0.aar',
+            'transport-api-2.2.1.aar',
+            'transport-backend-cct-2.3.3.aar',
+            'transport-runtime-2.2.6.aar',
+            'javax.inject-1.jar',
+            'firebase-components-16.1.0.aar',
+            'firebase-annotations-16.0.0.jar',
+            'firebase-encoders-16.1.0.jar',
+            'firebase-encoders-json-17.1.0.aar',
+            'text-recognition-16.0.1.aar',
+            'text-recognition-bundled-common-17.0.0.aar',
+            'vision-common-17.3.0.aar',
+          ]
+          for n in selected:
+              assert os.path.exists(os.path.join(deps,n)), n
+
+          # Full resolved graph is compile-only. It is NOT automatically packaged into the extension.
+          for p in sorted(glob.glob(deps+'/*')):
+              b=os.path.basename(p)
+              if p.endswith('.jar'):
+                  shutil.copy2(p,os.path.join(compile_dir,b))
+              elif p.endswith('.aar'):
+                  with zipfile.ZipFile(p) as z:
+                      if 'classes.jar' in z.namelist():
+                          open(os.path.join(compile_dir,b[:-4]+'__classes.jar'),'wb').write(z.read('classes.jar'))
+
+          entries={}
+          owners={}
+          class_conflicts=[]
+          asset_count=0
+          native_abis=set()
+          for n in selected:
+              p=os.path.join(deps,n)
+              jars=[]
+              if n.endswith('.jar'):
+                  jars=[(n,open(p,'rb').read())]
+              else:
+                  with zipfile.ZipFile(p) as a:
+                      if 'classes.jar' in a.namelist():
+                          jars=[(n+'!classes.jar',a.read('classes.jar'))]
+                      for e in a.namelist():
+                          if e.startswith('assets/') and not e.endswith('/'):
+                              data=a.read(e)
+                              dst='/tmp/mvruntime/aar/'+e
+                              os.makedirs(os.path.dirname(dst),exist_ok=True)
+                              if not os.path.exists(dst):
+                                  open(dst,'wb').write(data); asset_count+=1
+                          if e.startswith('jni/') and e.endswith('.so'):
+                              parts=e.split('/')
+                              if len(parts)>=3 and parts[1] in ('arm64-v8a','armeabi-v7a'):
+                                  data=a.read(e)
+                                  dst='/tmp/mvruntime/aar/'+e
+                                  os.makedirs(os.path.dirname(dst),exist_ok=True)
+                                  if not os.path.exists(dst):
+                                      open(dst,'wb').write(data)
+                                  native_abis.add(parts[1])
+              for owner,jb in jars:
+                  with zipfile.ZipFile(io.BytesIO(jb)) as z:
+                      for e in z.namelist():
+                          if e.endswith('/') or e.upper().startswith('META-INF/'):
+                              continue
+                          data=z.read(e)
+                          if e in entries:
+                              if entries[e]!=data and e.endswith('.class'):
+                                  class_conflicts.append((e,owners[e],owner))
+                              continue
+                          entries[e]=data; owners[e]=owner
+
+          assert not class_conflicts, class_conflicts[:20]
+          assert asset_count>0, 'OCR model assets missing'
+          assert native_abis=={'arm64-v8a','armeabi-v7a'}, native_abis
+          assert not any(x.startswith('androidx/') for x in entries), 'AndroidX classes must come from App Inventor runtime'
+          assert not any(x.startswith('kotlin/') for x in entries), 'Kotlin runtime must not be bundled'
+          activity_refs=[n for n,d in entries.items() if n.endswith('.class') and b'androidx/activity' in d]
+          assert not activity_refs, activity_refs[:20]
+
+          classes='/tmp/mvruntime/aar/classes.jar'
+          with zipfile.ZipFile(classes,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for n in sorted(entries):
+                  z.writestr(n,entries[n])
+
+          manifest='''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.gatecraft.motorvision.ocr.runtime"><application /></manifest>'''
+          open('/tmp/mvruntime/aar/AndroidManifest.xml','w').write(manifest)
+          runtime='/tmp/mvruntime/motorvision-ocr-runtime.aar'
+          with zipfile.ZipFile(runtime,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for root,dirs,files in os.walk('/tmp/mvruntime/aar'):
+                  for f in files:
+                      p=os.path.join(root,f); arc=os.path.relpath(p,'/tmp/mvruntime/aar')
+                      z.write(p,arc)
+          info={
+            'selected':selected,
+            'merged_entries':len(entries),
+            'merged_classes':sum(1 for x in entries if x.endswith('.class')),
+            'assets':asset_count,
+            'abis':sorted(native_abis),
+            'aar_bytes':os.path.getsize(runtime),
+            'sha256':hashlib.sha256(open(runtime,'rb').read()).hexdigest(),
+            'androidx_activity_refs':len(activity_refs),
+          }
+          open('/tmp/mvruntime/runtime-audit.json','w').write(json.dumps(info,indent=2))
+          print(json.dumps(info,indent=2))
+          PY
+          unzip -t /tmp/mvruntime/motorvision-ocr-runtime.aar
+          unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar > /tmp/mvruntime/runtime-list.txt
+          ! unzip -p /tmp/mvruntime/motorvision-ocr-runtime.aar AndroidManifest.xml | grep -Eqi 'INTERNET|ACCESS_NETWORK_STATE|CAMERA|MlKitInitProvider'
+          test -n "$(unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar | grep 'assets/mlkit-google-ocr-models/' | head -1)"
+          test -n "$(unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar | grep 'jni/arm64-v8a/libmlkit_google_ocr_pipeline.so')"
+          test -n "$(unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar | grep 'jni/armeabi-v7a/libmlkit_google_ocr_pipeline.so')"
+          ! unzip -l /tmp/mvruntime/motorvision-ocr-runtime.aar | grep -q 'jni/x86'
       - name: Compile isolated OCR bridge against resolved payload
         run: |
           ANDROID_JAR=$(find "$ANDROID_HOME/platforms" -name android.jar | sort -V | tail -1)
           test -f "$ANDROID_JAR"
-          CP="$ANDROID_JAR:$(find /tmp/mvpayload/jars -type f -name '*.jar' | sort | paste -sd: -)"
+          CP="$ANDROID_JAR:$(find /tmp/mvruntime/compile-jars -type f -name '*.jar' | sort | paste -sd: -)"
           rm -rf /tmp/mvclasses && mkdir -p /tmp/mvclasses
           javac -source 8 -target 8 -cp "$CP" -d /tmp/mvclasses motorvision_phase2h/src/com/gatecraft/motorvision/MotorVisionMlKitOcr.java
           test -f /tmp/mvclasses/com/gatecraft/motorvision/MotorVisionMlKitOcr.class
@@ -266,21 +391,66 @@ jobs:
           rm -rf /tmp/mvaix
           cp -a /tmp/aitemplate /tmp/mvaix
           find /tmp/mvaix/src -type f -delete || true
-          mkdir -p /tmp/mvaix/src/com/gatecraft/motorvision /tmp/mvaix/lib/deps /tmp/mvaix/assets
+          mkdir -p /tmp/mvaix/src/com/gatecraft/motorvision /tmp/mvaix/lib/deps
           echo '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' | base64 -d > /tmp/phase2e-src.tgz
           tar xzf /tmp/phase2e-src.tgz -C /tmp/mvaix/src
+          test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/GateCraftMotorVision.java | cut -d' ' -f1)" = "7582aeadf765e456b240bedcc1a33d786b149172434e9c32597e753a7f81d2d5"
           test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/MotorVisionMatcherCore.java | cut -d' ' -f1)" = "3defa2c2bd4c37b74bfd035af5c26881d99772e8f66d22d2d946aa51ab98b526"
+          test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/MiniJson.java | cut -d' ' -f1)" = "2c2e0981db7f93a5e693ff2f8f7360b434e682cb8ef68abfca4e88d907515fdb"
+          test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/MotorVisionOcrText.java | cut -d' ' -f1)" = "1632bdd1e47be10b34de4e566357fe7439bdc6ce4e80503376d2935398fee986"
+          test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/MotorVisionTexts.java | cut -d' ' -f1)" = "51c672e22de2f64db0d6eb343ddaba1db76add9fe373c0ca7938c7455961ccd4"
+          cp motorvision_phase2h/phase2k/GateCraftMotorVision.java /tmp/mvaix/src/com/gatecraft/motorvision/GateCraftMotorVision.java
           cp motorvision_phase2h/src/com/gatecraft/motorvision/MotorVisionMlKitOcr.java /tmp/mvaix/src/com/gatecraft/motorvision/
-          cp /tmp/mvpayload/jars/*.jar /tmp/mvaix/lib/deps/
-          cp -a /tmp/mvpayload/assets/. /tmp/mvaix/assets/
+          cp /tmp/mvruntime/compile-jars/*.jar /tmp/mvaix/lib/deps/
+          cp /tmp/mvruntime/motorvision-ocr-runtime.aar /tmp/mvaix/lib/deps/
           cd /tmp/mvaix
           ant extensions
           find . -type f -name '*.aix' -print
           AIX=$(find . -type f -name '*.aix' | head -1)
           test -n "$AIX"
-          cp "$AIX" /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix
-          unzip -t /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix
-          unzip -l /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix > /tmp/motorvision-aix-list.txt
+          cp "$AIX" /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix
+          unzip -t /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix
+          unzip -l /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix > /tmp/motorvision-aix-list.txt
+      - name: Audit Phase2K AIX contract
+        run: |
+          rm -rf /tmp/mvaudit && mkdir -p /tmp/mvaudit
+          unzip -q /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix -d /tmp/mvaudit
+          python3 - <<'PY'
+          import json,glob,os,zipfile,hashlib
+          root=glob.glob('/tmp/mvaudit/*')[0]
+          comp=json.load(open(os.path.join(root,'components.json')))[0]
+          build=json.load(open(os.path.join(root,'files','component_build_infos.json')))[0]
+          methods={x['name'] for x in comp.get('methods',[])}
+          events={x['name']:len(x.get('params',[])) for x in comp.get('events',[])}
+          old={'BestControllerId','BestScore','CleanOcrText','ControllerCount','DatabaseVersion','IdentifyFromOcrText','IdentifyFromText','IndexLoaded','LanguageCode','LanguageIndex','LastError','LoadControllerIndex','NormalizeText','Schema','SetLanguageCode','SetLanguageIndex','SetTheme','Theme','ThemeBackButtonImage','ThemeBackgroundImage','ThemeButtonImage','ThemeTextColor','TopMatchesJson','UiText','Version'}
+          assert old.issubset(methods), sorted(old-methods)
+          assert {'RecognizeImage','OcrBusy','CloseOcr'}.issubset(methods)
+          assert events.get('OcrRecognized')==2, events
+          assert events.get('OcrFailed')==1, events
+          assert build.get('libraries')==['motorvision-ocr-runtime.aar'], build.get('libraries')
+          assert not build.get('permissions'), build.get('permissions')
+          services='\n'.join(build.get('services',[]))
+          metadata='\n'.join(build.get('metadata',[]))
+          assert 'MlKitComponentDiscoveryService' in services
+          assert 'TextRegistrar' in services and 'VisionCommonRegistrar' in services and 'CommonComponentRegistrar' in services
+          assert 'com.google.mlkit.vision.DEPENDENCIES' in metadata and 'ocr' in metadata
+          assert 'INTERNET' not in services+metadata and 'CAMERA' not in services+metadata
+          aars=glob.glob(os.path.join(root,'aars','motorvision-ocr-runtime.aar'))
+          assert len(aars)==1,aars
+          aar=aars[0]
+          with zipfile.ZipFile(aar) as z:
+              names=z.namelist()
+              assert any(x.startswith('assets/mlkit-google-ocr-models/') for x in names)
+              assert 'jni/arm64-v8a/libmlkit_google_ocr_pipeline.so' in names
+              assert 'jni/armeabi-v7a/libmlkit_google_ocr_pipeline.so' in names
+              assert not any(x.startswith('jni/x86') for x in names)
+              assert 'classes.jar' in names
+          size=os.path.getsize('/tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix')
+          assert size>1000000,size
+          report={'aix_bytes':size,'methods':len(methods),'events':events,'libraries':build.get('libraries'),'services':build.get('services'),'metadata':build.get('metadata'),'sha256':hashlib.sha256(open('/tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix','rb').read()).hexdigest()}
+          open('/tmp/motorvision-phase2k-audit.json','w').write(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: MotorVision-Phase2H-resolved-dependencies
@@ -291,12 +461,14 @@ jobs:
             /tmp/mvcompat/dependency-tree.txt
             /tmp/mvcompat/activity-audit.txt
             /tmp/mvpayload/**
+            /tmp/mvruntime/**
+            /tmp/motorvision-phase2k-audit.json
             /tmp/mvpayload-coupling.txt
             /tmp/motorvision-manifest-policy.txt
             /tmp/motorvision-mlkit-manifest-tokens.txt
             /tmp/MotorVision.offline-manifest.xml
             /tmp/motorvision-bridge-javap.txt
-            /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix
+            /tmp/GateCraftMotorVision_PHASE2K_ISOLATED.aix
             /tmp/motorvision-aix-list.txt
             /tmp/mvaix/src/com/gatecraft/motorvision/
           if-no-files-found: error
