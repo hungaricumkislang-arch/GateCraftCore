@@ -1,0 +1,26 @@
+name: Export Android D8 tool
+on:
+  push:
+    branches: [ tmp-unused ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect latest D8
+        run: |
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          echo "BUILD_TOOLS=$BT"
+          mkdir -p /tmp/d8tool
+          cp "$BT/d8" /tmp/d8tool/
+          if [ -f "$BT/lib/d8.jar" ]; then cp "$BT/lib/d8.jar" /tmp/d8tool/; fi
+          if [ -f "$BT/lib/d8.jar" ]; then sha256sum "$BT/lib/d8.jar"; fi
+          ls -lh /tmp/d8tool
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-d8-tool
+          path: /tmp/d8tool/*
+          if-no-files-found: error
