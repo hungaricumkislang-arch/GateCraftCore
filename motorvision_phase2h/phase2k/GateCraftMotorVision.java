@@ -17,7 +17,7 @@ import java.util.Locale;
 
 @DesignerComponent(version=2, description="Offline GateCraft MotorDiag controller recognition core with bundled image OCR, 12-language and 4-theme contract.", category=ComponentCategory.EXTENSION, nonVisible=true, iconName="")
 @SimpleObject(external=true)
-@UsesLibraries(libraries="motorvision-ocr-runtime.aar")
+@UsesLibraries({"motorvision-ocr-runtime.aar"})
 @UsesServices(services={
   @ServiceElement(
     name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService",
