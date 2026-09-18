@@ -1,0 +1,21 @@
+name: Export App Inventor extension build tools
+on:
+  push:
+    branches: [ tmp-unused ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch extension template
+        run: git clone --recurse-submodules https://github.com/mit-cml/extension-template.git /tmp/aitemplate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appinventor-extension-build-tools
+          path: |
+            /tmp/aitemplate/lib/appinventor/*.jar
+            /tmp/aitemplate/lib/ant-contrib/*.jar
+          if-no-files-found: error
