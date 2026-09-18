@@ -36,6 +36,47 @@ jobs:
           mvn -B dependency:tree -Dscope=runtime -Dverbose -DoutputFile=/tmp/mvdeps/dependency-tree.txt
           ls -lh deps
           find deps -type f -print0 | sort -z | xargs -0 sha256sum > dependency-sha256.txt
+      - name: Resolve App Inventor compatible Play Services candidate
+        run: |
+          rm -rf /tmp/mvcompat && mkdir -p /tmp/mvcompat
+          cat > /tmp/mvcompat/pom.xml <<'EOF'
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>com.gatecraft</groupId><artifactId>motorvision-compat</artifactId><version>1</version>
+            <repositories>
+              <repository><id>google</id><url>https://dl.google.com/dl/android/maven2/</url></repository>
+              <repository><id>central</id><url>https://repo.maven.apache.org/maven2/</url></repository>
+            </repositories>
+            <dependencyManagement><dependencies>
+              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-base</artifactId><version>18.1.0</version></dependency>
+              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-basement</artifactId><version>18.1.0</version></dependency>
+              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-tasks</artifactId><version>18.0.2</version></dependency>
+              <dependency><groupId>androidx.lifecycle</groupId><artifactId>lifecycle-common</artifactId><version>2.5.1</version></dependency>
+            </dependencies></dependencyManagement>
+            <dependencies>
+              <dependency><groupId>com.google.mlkit</groupId><artifactId>text-recognition</artifactId><version>16.0.1</version><type>aar</type></dependency>
+            </dependencies>
+          </project>
+          EOF
+          cd /tmp/mvcompat
+          mvn -B dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=deps
+          mvn -B dependency:tree -Dscope=runtime -Dverbose -DoutputFile=/tmp/mvcompat/dependency-tree.txt
+          python3 - <<'PY'
+          import zipfile,glob,os,subprocess
+          out=[]
+          for name in ['play-services-base-18.1.0.aar','play-services-basement-18.1.0.aar','play-services-tasks-18.0.2.aar']:
+              p='/tmp/mvcompat/deps/'+name
+              assert os.path.exists(p), p
+              with zipfile.ZipFile(p) as z:
+                  dst='/tmp/mvcompat/'+name.replace('.aar','-classes.jar')
+                  open(dst,'wb').write(z.read('classes.jar'))
+              cp=':'.join(glob.glob('/tmp/mvcompat/*-classes.jar'))
+              txt=subprocess.run(['jdeps','--multi-release','base','-q','-verbose:class','-cp',cp,dst],text=True,capture_output=True).stdout
+              hits=[x for x in txt.splitlines() if 'androidx.activity' in x]
+              out.append(name+' activity_refs='+str(len(hits))+'\n'+'\n'.join(hits[:50]))
+          open('/tmp/mvcompat/activity-audit.txt','w').write('\n\n'.join(out))
+          print('\n\n'.join(out))
+          PY
       - name: Inspect extension-template dependency support
         run: |
           git clone --recurse-submodules https://github.com/mit-cml/extension-template.git /tmp/aitemplate
@@ -243,6 +284,8 @@ jobs:
             /tmp/mvdeps/deps/*
             /tmp/mvdeps/dependency-sha256.txt
             /tmp/mvdeps/dependency-tree.txt
+            /tmp/mvcompat/dependency-tree.txt
+            /tmp/mvcompat/activity-audit.txt
             /tmp/mvpayload/**
             /tmp/mvpayload-coupling.txt
             /tmp/motorvision-manifest-policy.txt
