@@ -88,6 +88,25 @@ jobs:
           assert len(rows)==53
           assert sum(r[1]>0 for r in rows)==17
           PY
+      - name: Classify ML Kit manifest and resource coupling
+        run: |
+          python3 - <<'PY'
+          import zipfile,glob,os,re
+          critical=[]
+          for p in sorted(glob.glob('/tmp/mvdeps/deps/*.aar')):
+              with zipfile.ZipFile(p) as z:
+                  names=z.namelist()
+                  man=z.read('AndroidManifest.xml') if 'AndroidManifest.xml' in names else b''
+                  # Binary AXML: preserve printable tokens for audit without pretending to merge it.
+                  toks=sorted(set(x.decode('latin1','ignore') for x in re.findall(rb'[A-Za-z0-9_.$:/-]{4,}',man)))
+                  interesting=[x for x in toks if any(k in x.lower() for k in ('provider','service','receiver','permission','mlkit','startup','component'))]
+                  res=sum(1 for n in names if n.startswith('res/') and not n.endswith('/'))
+                  if interesting or res:
+                      critical.append((os.path.basename(p),res,interesting[:30]))
+          for a,res,t in critical:
+              print('COUPLING',a,'res',res,'manifest_tokens',t)
+          open('/tmp/mvpayload-coupling.txt','w').write('\n'.join('%s res=%s %s'%(a,res,t) for a,res,t in critical))
+          PY
       - name: Prepare AAR payload map for AIX integration
         run: |
           rm -rf /tmp/mvpayload
@@ -134,4 +153,5 @@ jobs:
             /tmp/mvdeps/deps/*
             /tmp/mvdeps/dependency-sha256.txt
             /tmp/mvpayload/**
+            /tmp/mvpayload-coupling.txt
           if-no-files-found: error
