@@ -48,9 +48,9 @@ jobs:
               <repository><id>central</id><url>https://repo.maven.apache.org/maven2/</url></repository>
             </repositories>
             <dependencyManagement><dependencies>
-              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-base</artifactId><version>18.1.0</version></dependency>
-              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-basement</artifactId><version>18.1.0</version></dependency>
-              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-tasks</artifactId><version>18.0.2</version></dependency>
+              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-base</artifactId><version>18.1.0</version><type>aar</type></dependency>
+              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-basement</artifactId><version>18.1.0</version><type>aar</type></dependency>
+              <dependency><groupId>com.google.android.gms</groupId><artifactId>play-services-tasks</artifactId><version>18.0.2</version><type>aar</type></dependency>
               <dependency><groupId>androidx.lifecycle</groupId><artifactId>lifecycle-common</artifactId><version>2.5.1</version></dependency>
             </dependencies></dependencyManagement>
             <dependencies>
@@ -62,17 +62,21 @@ jobs:
           mvn -B dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=deps
           mvn -B dependency:tree -Dscope=runtime -Dverbose -DoutputFile=/tmp/mvcompat/dependency-tree.txt
           python3 - <<'PY'
-          import zipfile,glob,os,subprocess
+          import zipfile,os
           out=[]
+          needle=b'androidx/activity'
           for name in ['play-services-base-18.1.0.aar','play-services-basement-18.1.0.aar','play-services-tasks-18.0.2.aar']:
               p='/tmp/mvcompat/deps/'+name
               assert os.path.exists(p), p
-              with zipfile.ZipFile(p) as z:
-                  dst='/tmp/mvcompat/'+name.replace('.aar','-classes.jar')
-                  open(dst,'wb').write(z.read('classes.jar'))
-              cp=':'.join(glob.glob('/tmp/mvcompat/*-classes.jar'))
-              txt=subprocess.run(['jdeps','--multi-release','base','-q','-verbose:class','-cp',cp,dst],text=True,capture_output=True).stdout
-              hits=[x for x in txt.splitlines() if 'androidx.activity' in x]
+              hits=[]
+              with zipfile.ZipFile(p) as a:
+                  cj=a.read('classes.jar')
+              jar='/tmp/mvcompat/'+name.replace('.aar','-classes.jar')
+              open(jar,'wb').write(cj)
+              with zipfile.ZipFile(jar) as z:
+                  for n in z.namelist():
+                      if n.endswith('.class') and needle in z.read(n):
+                          hits.append(n)
               out.append(name+' activity_refs='+str(len(hits))+'\n'+'\n'.join(hits[:50]))
           open('/tmp/mvcompat/activity-audit.txt','w').write('\n\n'.join(out))
           print('\n\n'.join(out))
