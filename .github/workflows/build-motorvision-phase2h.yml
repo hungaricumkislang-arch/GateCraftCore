@@ -70,6 +70,24 @@ jobs:
           grep -q '<artifactId>text-recognition</artifactId>' /tmp/mvdeps/pom.xml
           ! grep -q '<artifactId>play-services-mlkit-text-recognition</artifactId>' /tmp/mvdeps/pom.xml
           du -sh /tmp/mvdeps/deps
+      - name: Audit AAR resource and manifest requirements
+        run: |
+          python3 - <<'PY'
+          import zipfile,glob,os,re
+          rows=[]
+          for p in sorted(glob.glob('/tmp/mvdeps/deps/*.aar')):
+              with zipfile.ZipFile(p) as z:
+                  n=z.namelist()
+                  res=[x for x in n if x.startswith('res/') and not x.endswith('/')]
+                  manifest=z.read('AndroidManifest.xml') if 'AndroidManifest.xml' in n else b''
+                  rows.append((os.path.basename(p),len(res),len(manifest),sum(1 for x in n if x.startswith('assets/') and not x.endswith('/')),sum(1 for x in n if x.startswith('jni/') and not x.endswith('/'))))
+          print('AAR resource/manifest inventory')
+          for r in rows:
+              if r[1] or r[3] or r[4]: print(*r)
+          print('AAR total',len(rows),'with_res',sum(r[1]>0 for r in rows),'with_manifest',sum(r[2]>0 for r in rows))
+          assert len(rows)==53
+          assert sum(r[1]>0 for r in rows)==17
+          PY
       - name: Prepare AAR payload map for AIX integration
         run: |
           rm -rf /tmp/mvpayload
