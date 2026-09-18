@@ -149,7 +149,7 @@ jobs:
           cat > /tmp/MotorVision.offline-manifest.xml <<'XML'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <application>
-              <provider android:name="com.google.mlkit.common.internal.MlKitInitProvider" android:authorities="${applicationId}.mlkitinitprovider" android:exported="false" android:initOrder="99" />
+              <!-- MotorVision initializes ML Kit explicitly; no provider/applicationId placeholder required. -->
               <service android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService" android:directBootAware="true" android:exported="false">
                 <meta-data android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
                 <meta-data android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
@@ -160,7 +160,7 @@ jobs:
           </manifest>
           XML
           ! grep -Eqi 'INTERNET|ACCESS_NETWORK_STATE|CAMERA' /tmp/MotorVision.offline-manifest.xml
-          grep -q 'MlKitInitProvider' /tmp/MotorVision.offline-manifest.xml
+          ! grep -q 'MlKitInitProvider' /tmp/MotorVision.offline-manifest.xml
           grep -q 'TextRegistrar' /tmp/MotorVision.offline-manifest.xml
           grep -q 'VisionCommonRegistrar' /tmp/MotorVision.offline-manifest.xml
           grep -q 'CommonComponentRegistrar' /tmp/MotorVision.offline-manifest.xml
@@ -204,6 +204,17 @@ jobs:
           assert arm64, 'No arm64-v8a native library found'
           PY
           du -sh /tmp/mvpayload
+      - name: Compile isolated OCR bridge against resolved payload
+        run: |
+          ANDROID_JAR=$(find "$ANDROID_HOME/platforms" -name android.jar | sort -V | tail -1)
+          test -f "$ANDROID_JAR"
+          CP="$ANDROID_JAR:$(find /tmp/mvpayload/jars -type f -name '*.jar' | sort | paste -sd: -)"
+          rm -rf /tmp/mvclasses && mkdir -p /tmp/mvclasses
+          javac -source 8 -target 8 -cp "$CP" -d /tmp/mvclasses motorvision_phase2h/src/com/gatecraft/motorvision/MotorVisionMlKitOcr.java
+          test -f /tmp/mvclasses/com/gatecraft/motorvision/MotorVisionMlKitOcr.class
+          javap -classpath "/tmp/mvclasses:$CP" com.gatecraft.motorvision.MotorVisionMlKitOcr > /tmp/motorvision-bridge-javap.txt
+          grep -q 'recognize(java.lang.String' /tmp/motorvision-bridge-javap.txt
+          echo "OCR_BRIDGE_COMPILE_PASS"
       - uses: actions/upload-artifact@v4
         with:
           name: MotorVision-Phase2H-resolved-dependencies
@@ -215,4 +226,5 @@ jobs:
             /tmp/motorvision-manifest-policy.txt
             /tmp/motorvision-mlkit-manifest-tokens.txt
             /tmp/MotorVision.offline-manifest.xml
+            /tmp/motorvision-bridge-javap.txt
           if-no-files-found: error
