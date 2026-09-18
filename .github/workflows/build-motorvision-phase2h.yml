@@ -33,6 +33,7 @@ jobs:
           EOF
           cd /tmp/mvdeps
           mvn -B dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=deps
+          mvn -B dependency:tree -Dscope=runtime -Dverbose -DoutputFile=/tmp/mvdeps/dependency-tree.txt
           ls -lh deps
           find deps -type f -print0 | sort -z | xargs -0 sha256sum > dependency-sha256.txt
       - name: Inspect extension-template dependency support
@@ -241,6 +242,7 @@ jobs:
           path: |
             /tmp/mvdeps/deps/*
             /tmp/mvdeps/dependency-sha256.txt
+            /tmp/mvdeps/dependency-tree.txt
             /tmp/mvpayload/**
             /tmp/mvpayload-coupling.txt
             /tmp/motorvision-manifest-policy.txt
