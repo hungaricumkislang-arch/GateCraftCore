@@ -70,10 +70,41 @@ jobs:
           grep -q '<artifactId>text-recognition</artifactId>' /tmp/mvdeps/pom.xml
           ! grep -q '<artifactId>play-services-mlkit-text-recognition</artifactId>' /tmp/mvdeps/pom.xml
           du -sh /tmp/mvdeps/deps
+      - name: Prepare AAR payload map for AIX integration
+        run: |
+          rm -rf /tmp/mvpayload
+          mkdir -p /tmp/mvpayload/jars /tmp/mvpayload/assets /tmp/mvpayload/jni
+          python3 - <<'PY'
+          import zipfile,glob,os,shutil,json
+          deps='/tmp/mvdeps/deps'; out='/tmp/mvpayload'; manifest=[]
+          for p in sorted(glob.glob(deps+'/*')):
+              base=os.path.basename(p)
+              if p.endswith('.jar'):
+                  shutil.copy2(p,out+'/jars/'+base); manifest.append({'artifact':base,'kind':'jar'})
+              elif p.endswith('.aar'):
+                  with zipfile.ZipFile(p) as z:
+                      names=z.namelist()
+                      if 'classes.jar' in names:
+                          target=base[:-4]+'__classes.jar'
+                          open(out+'/jars/'+target,'wb').write(z.read('classes.jar'))
+                      assets=[n for n in names if n.startswith('assets/') and not n.endswith('/')]
+                      jnis=[n for n in names if n.startswith('jni/') and not n.endswith('/')]
+                      for n in assets:
+                          dst=os.path.join(out,n); os.makedirs(os.path.dirname(dst),exist_ok=True); open(dst,'wb').write(z.read(n))
+                      for n in jnis:
+                          dst=os.path.join(out,n); os.makedirs(os.path.dirname(dst),exist_ok=True); open(dst,'wb').write(z.read(n))
+                      manifest.append({'artifact':base,'kind':'aar','classes':('classes.jar' in names),'assets':len(assets),'jni':len(jnis),'resources':any(n.startswith('res/') for n in names),'manifest':('AndroidManifest.xml' in names)})
+          open(out+'/payload-map.json','w').write(json.dumps(manifest,indent=2))
+          print('jars',len(glob.glob(out+'/jars/*')),'assets',len(glob.glob(out+'/assets/**/*',recursive=True)),'jni',len(glob.glob(out+'/jni/**/*',recursive=True)))
+          PY
+          test -f /tmp/mvpayload/assets/mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/latin/conv_model.fb
+          test -f /tmp/mvpayload/jni/arm64-v8a/libtextclassifier3_jni.so
+          du -sh /tmp/mvpayload
       - uses: actions/upload-artifact@v4
         with:
           name: MotorVision-Phase2H-resolved-dependencies
           path: |
             /tmp/mvdeps/deps/*
             /tmp/mvdeps/dependency-sha256.txt
+            /tmp/mvpayload/**
           if-no-files-found: error
