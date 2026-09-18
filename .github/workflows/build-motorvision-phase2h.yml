@@ -144,6 +144,27 @@ jobs:
                   out.append(name+'\n'+'\n'.join(keep))
           open('/tmp/motorvision-mlkit-manifest-tokens.txt','w').write('\n\n'.join(out))
           PY
+      - name: Generate minimal offline manifest contract
+        run: |
+          cat > /tmp/MotorVision.offline-manifest.xml <<'XML'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application>
+              <provider android:name="com.google.mlkit.common.internal.MlKitInitProvider" android:authorities="${applicationId}.mlkitinitprovider" android:exported="false" android:initOrder="99" />
+              <service android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService" android:directBootAware="true" android:exported="false">
+                <meta-data android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
+                <meta-data android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
+                <meta-data android:name="com.google.firebase.components:com.google.mlkit.vision.text.internal.TextRegistrar" android:value="com.google.firebase.components.ComponentRegistrar" />
+              </service>
+              <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="ocr" />
+            </application>
+          </manifest>
+          XML
+          ! grep -Eqi 'INTERNET|ACCESS_NETWORK_STATE|CAMERA' /tmp/MotorVision.offline-manifest.xml
+          grep -q 'MlKitInitProvider' /tmp/MotorVision.offline-manifest.xml
+          grep -q 'TextRegistrar' /tmp/MotorVision.offline-manifest.xml
+          grep -q 'VisionCommonRegistrar' /tmp/MotorVision.offline-manifest.xml
+          grep -q 'CommonComponentRegistrar' /tmp/MotorVision.offline-manifest.xml
+          cat /tmp/MotorVision.offline-manifest.xml
       - name: Prepare AAR payload map for AIX integration
         run: |
           rm -rf /tmp/mvpayload
@@ -193,4 +214,5 @@ jobs:
             /tmp/mvpayload-coupling.txt
             /tmp/motorvision-manifest-policy.txt
             /tmp/motorvision-mlkit-manifest-tokens.txt
+            /tmp/MotorVision.offline-manifest.xml
           if-no-files-found: error
