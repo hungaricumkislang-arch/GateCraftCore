@@ -40,6 +40,26 @@ jobs:
           git clone --recurse-submodules https://github.com/mit-cml/extension-template.git /tmp/aitemplate
           grep -n 'lib/deps' /tmp/aitemplate/build.xml
           echo "Stock template javac/unjar pipeline is JAR-oriented; AAR contents require explicit preparation."
+      - name: Audit ML Kit AAR payload
+        run: |
+          python3 - <<'PY'
+          import zipfile, glob, os
+          deps='/tmp/mvdeps/deps'
+          critical=['text-recognition-16.0.1.aar','text-recognition-bundled-common-17.0.0.aar']
+          for name in critical:
+              p=os.path.join(deps,name)
+              with zipfile.ZipFile(p) as z:
+                  names=z.namelist()
+                  assets=[x for x in names if x.startswith('assets/') and not x.endswith('/')]
+                  jni=[x for x in names if x.startswith('jni/') and not x.endswith('/')]
+                  print(name,'assets',len(assets),'jni',len(jni),'classes.jar',('classes.jar' in names))
+                  if name.startswith('text-recognition-16'):
+                      assert assets, 'bundled OCR model assets missing'
+                  if name.startswith('text-recognition-bundled-common'):
+                      abis=sorted({x.split('/')[1] for x in jni})
+                      print('abis',abis)
+                      assert abis==['arm64-v8a','armeabi-v7a','x86','x86_64']
+          PY
       - name: Dependency gates
         run: |
           test -f /tmp/mvdeps/deps/text-recognition-16.0.1.aar
