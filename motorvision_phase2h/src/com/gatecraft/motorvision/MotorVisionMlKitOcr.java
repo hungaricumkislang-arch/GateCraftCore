@@ -2,6 +2,7 @@ package com.gatecraft.motorvision;
 import android.net.Uri;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.mlkit.common.MlKit;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
@@ -11,8 +12,12 @@ import java.io.IOException;
 public final class MotorVisionMlKitOcr {
  public interface Callback { void ok(String text); void fail(String message); }
  private final android.content.Context context;
- private final TextRecognizer recognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
- public MotorVisionMlKitOcr(android.content.Context context){this.context=context;}
+ private final TextRecognizer recognizer;
+ public MotorVisionMlKitOcr(android.content.Context context){
+  this.context=context.getApplicationContext();
+  MlKit.initialize(this.context);
+  this.recognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+ }
  public void recognize(String imagePath, final Callback cb){
   try{
    String raw=imagePath==null?"":imagePath.trim();
