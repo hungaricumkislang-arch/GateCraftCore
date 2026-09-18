@@ -442,7 +442,7 @@ jobs:
           test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/MiniJson.java | cut -d' ' -f1)" = "2c2e0981db7f93a5e693ff2f8f7360b434e682cb8ef68abfca4e88d907515fdb"
           test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/MotorVisionOcrText.java | cut -d' ' -f1)" = "1632bdd1e47be10b34de4e566357fe7439bdc6ce4e80503376d2935398fee986"
           test "$(sha256sum /tmp/mvaix/src/com/gatecraft/motorvision/MotorVisionTexts.java | cut -d' ' -f1)" = "51c672e22de2f64db0d6eb343ddaba1db76add9fe373c0ca7938c7455961ccd4"
-          cp motorvision_phase2h/phase2m/GateCraftMotorVision.java /tmp/mvaix/src/com/gatecraft/motorvision/GateCraftMotorVision.java
+          cp motorvision_phase2h/phase2n/GateCraftMotorVision.java /tmp/mvaix/src/com/gatecraft/motorvision/GateCraftMotorVision.java
           cp motorvision_phase2h/src/com/gatecraft/motorvision/MotorVisionMlKitOcr.java /tmp/mvaix/src/com/gatecraft/motorvision/
           cp /tmp/mvruntime/compile-jars/*.jar /tmp/mvaix/lib/deps/
           cp /tmp/mvruntime/motorvision-ocr-runtime.aar /tmp/mvaix/lib/deps/
@@ -451,14 +451,14 @@ jobs:
           find . -type f -name '*.aix' -print
           AIX=$(find . -type f -name '*.aix' | head -1)
           test -n "$AIX"
-          cp "$AIX" /tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix
-          unzip -t /tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix
-          unzip -l /tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix > /tmp/motorvision-aix-list.txt
-      - name: Finalize Phase2M AIX package contract
+          cp "$AIX" /tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix
+          unzip -t /tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix
+          unzip -l /tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix > /tmp/motorvision-aix-list.txt
+      - name: Finalize Phase2N AIX package contract
         run: |
           python3 - <<'PY'
           import zipfile,json,os,tempfile,shutil
-          src='/tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix'
+          src='/tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix'
           runtime='/tmp/mvruntime/motorvision-ocr-runtime.aar'
           work='/tmp/mvfinal'
           shutil.rmtree(work,ignore_errors=True)
@@ -505,12 +505,12 @@ jobs:
                       z.write(p,os.path.relpath(p,work))
           os.replace(tmp,src)
           PY
-          unzip -t /tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix
-          unzip -l /tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix > /tmp/motorvision-aix-list.txt
-      - name: Audit Phase2M AIX contract
+          unzip -t /tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix
+          unzip -l /tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix > /tmp/motorvision-aix-list.txt
+      - name: Audit Phase2N AIX contract
         run: |
           rm -rf /tmp/mvaudit && mkdir -p /tmp/mvaudit
-          unzip -q /tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix -d /tmp/mvaudit
+          unzip -q /tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix -d /tmp/mvaudit
           python3 - <<'PY'
           import json,glob,os,zipfile,hashlib
           root=glob.glob('/tmp/mvaudit/*')[0]
@@ -520,7 +520,7 @@ jobs:
           events={x['name']:len(x.get('params',[])) for x in comp.get('events',[])}
           old={'BestControllerId','BestScore','CleanOcrText','ControllerCount','DatabaseVersion','IdentifyFromOcrText','IdentifyFromText','IndexLoaded','LanguageCode','LanguageIndex','LastError','LoadControllerIndex','NormalizeText','Schema','SetLanguageCode','SetLanguageIndex','SetTheme','Theme','ThemeBackButtonImage','ThemeBackgroundImage','ThemeButtonImage','ThemeTextColor','TopMatchesJson','UiText','Version'}
           assert old.issubset(methods), sorted(old-methods)
-          assert {'RecognizeImage','RecognizeAndIdentifyImage','LoadControllerIndexAsset','LoadDefaultControllerIndex','OcrBusy','CloseOcr'}.issubset(methods)
+          assert {'RecognizeImage','RecognizeAndIdentifyImage','LoadControllerIndexAsset','LoadDefaultControllerIndex','MatchCount','TopMatchIdList','TopMatchDisplayList','OcrBusy','CloseOcr'}.issubset(methods)
           assert events.get('OcrRecognized')==2, events
           assert events.get('OcrFailed')==1, events
           assert events.get('ImageIdentified')==5, events
@@ -543,10 +543,10 @@ jobs:
               assert 'jni/armeabi-v7a/libmlkit_google_ocr_pipeline.so' in names
               assert not any(x.startswith('jni/x86') for x in names)
               assert 'classes.jar' in names
-          size=os.path.getsize('/tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix')
+          size=os.path.getsize('/tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix')
           assert size>1000000,size
-          report={'aix_bytes':size,'methods':len(methods),'events':events,'libraries':build.get('libraries'),'services':build.get('services'),'metadata':build.get('metadata'),'sha256':hashlib.sha256(open('/tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix','rb').read()).hexdigest()}
-          open('/tmp/motorvision-phase2m-audit.json','w').write(json.dumps(report,indent=2))
+          report={'aix_bytes':size,'methods':len(methods),'events':events,'libraries':build.get('libraries'),'services':build.get('services'),'metadata':build.get('metadata'),'sha256':hashlib.sha256(open('/tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix','rb').read()).hexdigest()}
+          open('/tmp/motorvision-phase2n-audit.json','w').write(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
           PY
       - uses: actions/upload-artifact@v4
@@ -561,13 +561,13 @@ jobs:
             /tmp/mvpayload/**
             /tmp/mvruntime/**
             /tmp/mvruntime/support-reference-audit.json
-            /tmp/motorvision-phase2m-audit.json
+            /tmp/motorvision-phase2n-audit.json
             /tmp/mvpayload-coupling.txt
             /tmp/motorvision-manifest-policy.txt
             /tmp/motorvision-mlkit-manifest-tokens.txt
             /tmp/MotorVision.offline-manifest.xml
             /tmp/motorvision-bridge-javap.txt
-            /tmp/GateCraftMotorVision_PHASE2M_ISOLATED.aix
+            /tmp/GateCraftMotorVision_PHASE2N_ISOLATED.aix
             /tmp/motorvision-aix-list.txt
             /tmp/mvaix/src/com/gatecraft/motorvision/
           if-no-files-found: error
