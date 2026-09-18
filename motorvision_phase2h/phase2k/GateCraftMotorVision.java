@@ -7,11 +7,32 @@ import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleEvent;
+import com.google.appinventor.components.annotations.UsesLibraries;
+import com.google.appinventor.components.annotations.UsesServices;
+import com.google.appinventor.components.annotations.UsesApplicationMetadata;
+import com.google.appinventor.components.annotations.androidmanifest.ServiceElement;
+import com.google.appinventor.components.annotations.androidmanifest.MetaDataElement;
 import com.google.appinventor.components.common.ComponentCategory;
 import java.util.Locale;
 
 @DesignerComponent(version=2, description="Offline GateCraft MotorDiag controller recognition core with bundled image OCR, 12-language and 4-theme contract.", category=ComponentCategory.EXTENSION, nonVisible=true, iconName="")
 @SimpleObject(external=true)
+@UsesLibraries(libraries="motorvision-ocr-runtime.aar")
+@UsesServices(services={
+  @ServiceElement(
+    name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService",
+    directBootAware="true",
+    exported="false",
+    metaDataElements={
+      @MetaDataElement(name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar", value="com.google.firebase.components.ComponentRegistrar"),
+      @MetaDataElement(name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar", value="com.google.firebase.components.ComponentRegistrar"),
+      @MetaDataElement(name="com.google.firebase.components:com.google.mlkit.vision.text.internal.TextRegistrar", value="com.google.firebase.components.ComponentRegistrar")
+    }
+  )
+})
+@UsesApplicationMetadata(metaDataElements={
+  @MetaDataElement(name="com.google.mlkit.vision.DEPENDENCIES", value="ocr")
+})
 public class GateCraftMotorVision extends AndroidNonvisibleComponent {
   private final MotorVisionMatcherCore matcher=new MotorVisionMatcherCore();
   private final android.content.Context context;
