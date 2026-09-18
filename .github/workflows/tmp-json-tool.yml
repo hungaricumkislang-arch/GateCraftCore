@@ -1,0 +1,16 @@
+name: tmp-json-tool
+on:
+  push:
+    branches: [tmp-unused]
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download org.json
+        run: |
+          curl -L --fail --retry 3 -o /tmp/json.jar https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
+          test -s /tmp/json.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: json-runtime
+          path: /tmp/json.jar
