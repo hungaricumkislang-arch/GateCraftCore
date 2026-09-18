@@ -215,6 +215,24 @@ jobs:
           javap -classpath "/tmp/mvclasses:$CP" com.gatecraft.motorvision.MotorVisionMlKitOcr > /tmp/motorvision-bridge-javap.txt
           grep -q 'recognize(java.lang.String' /tmp/motorvision-bridge-javap.txt
           echo "OCR_BRIDGE_COMPILE_PASS"
+      - name: Build isolated MotorVision AIX with extension-template
+        run: |
+          rm -rf /tmp/mvaix
+          cp -a /tmp/aitemplate /tmp/mvaix
+          find /tmp/mvaix/src -type f -delete || true
+          mkdir -p /tmp/mvaix/src/com/gatecraft/motorvision /tmp/mvaix/lib/deps /tmp/mvaix/assets
+          cp motorvision_phase2h/fullsrc/com/gatecraft/motorvision/*.java /tmp/mvaix/src/com/gatecraft/motorvision/
+          cp motorvision_phase2h/src/com/gatecraft/motorvision/MotorVisionMlKitOcr.java /tmp/mvaix/src/com/gatecraft/motorvision/
+          cp /tmp/mvpayload/jars/*.jar /tmp/mvaix/lib/deps/
+          cp -a /tmp/mvpayload/assets/. /tmp/mvaix/assets/
+          cd /tmp/mvaix
+          ant extensions
+          find . -type f -name '*.aix' -print
+          AIX=$(find . -type f -name '*.aix' | head -1)
+          test -n "$AIX"
+          cp "$AIX" /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix
+          unzip -t /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix
+          unzip -l /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix > /tmp/motorvision-aix-list.txt
       - uses: actions/upload-artifact@v4
         with:
           name: MotorVision-Phase2H-resolved-dependencies
@@ -227,4 +245,6 @@ jobs:
             /tmp/motorvision-mlkit-manifest-tokens.txt
             /tmp/MotorVision.offline-manifest.xml
             /tmp/motorvision-bridge-javap.txt
+            /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix
+            /tmp/motorvision-aix-list.txt
           if-no-files-found: error
