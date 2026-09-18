@@ -249,4 +249,5 @@ jobs:
             /tmp/motorvision-bridge-javap.txt
             /tmp/GateCraftMotorVision_PHASE2J_ISOLATED.aix
             /tmp/motorvision-aix-list.txt
+            /tmp/mvaix/src/com/gatecraft/motorvision/
           if-no-files-found: error
