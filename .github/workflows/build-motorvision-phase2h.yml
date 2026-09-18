@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '8'
@@ -18,18 +18,26 @@ jobs:
         run: |
           mkdir -p /tmp/mvdeps
           cat > /tmp/mvdeps/pom.xml <<'EOF'
-          <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
-          <groupId>com.gatecraft</groupId><artifactId>motorvision-deps</artifactId><version>1</version>
-          <dependencies><dependency><groupId>com.google.mlkit</groupId><artifactId>text-recognition</artifactId><version>16.0.1</version></dependency></dependencies>
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>com.gatecraft</groupId><artifactId>motorvision-deps</artifactId><version>1</version>
+            <repositories>
+              <repository><id>google</id><url>https://dl.google.com/dl/android/maven2/</url></repository>
+              <repository><id>central</id><url>https://repo.maven.apache.org/maven2/</url></repository>
+            </repositories>
+            <dependencies>
+              <dependency><groupId>com.google.mlkit</groupId><artifactId>text-recognition</artifactId><version>16.0.1</version><type>aar</type></dependency>
+            </dependencies>
           </project>
           EOF
           cd /tmp/mvdeps
           mvn -B dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=deps
           ls -lh deps
           find deps -type f -print0 | sort -z | xargs -0 sha256sum > dependency-sha256.txt
-      - name: Guard against unbundled OCR artifact
+      - name: Dependency gates
         run: |
-          ! grep -R "play-services-mlkit-text-recognition" /tmp/mvdeps/dependency-sha256.txt
+          test -f /tmp/mvdeps/deps/text-recognition-16.0.1.aar
+          ! find /tmp/mvdeps/deps -type f -printf '%f\n' | grep '^play-services-mlkit-text-recognition'
           test -n "$(find /tmp/mvdeps/deps -type f | head -1)"
       - uses: actions/upload-artifact@v4
         with:
