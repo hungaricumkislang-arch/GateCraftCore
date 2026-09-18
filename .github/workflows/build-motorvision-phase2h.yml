@@ -128,6 +128,22 @@ jobs:
           open('/tmp/motorvision-manifest-policy.txt','w').write(
               'DO_NOT_MERGE_NETWORK_MANIFESTS='+','.join(offenders)+'\nREQUIRED_MLKIT_RUNTIME_MANIFESTS='+','.join(runtime)+'\n')
           PY
+      - name: Extract exact ML Kit runtime manifest tokens
+        run: |
+          python3 - <<'PY'
+          import zipfile,glob,os,re
+          targets=['common-18.11.0.aar','play-services-mlkit-text-recognition-common-19.1.0.aar','vision-common-17.3.0.aar','text-recognition-16.0.1.aar','text-recognition-bundled-common-17.0.0.aar']
+          out=[]
+          for name in targets:
+              p='/tmp/mvdeps/deps/'+name
+              with zipfile.ZipFile(p) as z:
+                  b=z.read('AndroidManifest.xml')
+                  toks=sorted(set(x.decode('latin1','ignore') for x in re.findall(rb'[A-Za-z0-9_.$:/=-]{3,}',b)))
+                  keep=[x for x in toks if ('mlkit' in x.lower() or 'firebase.components' in x.lower() or 'provider' in x.lower() or 'service' in x.lower() or 'registrar' in x.lower())]
+                  print('MANIFEST',name); print('\n'.join(keep))
+                  out.append(name+'\n'+'\n'.join(keep))
+          open('/tmp/motorvision-mlkit-manifest-tokens.txt','w').write('\n\n'.join(out))
+          PY
       - name: Prepare AAR payload map for AIX integration
         run: |
           rm -rf /tmp/mvpayload
@@ -176,4 +192,5 @@ jobs:
             /tmp/mvpayload/**
             /tmp/mvpayload-coupling.txt
             /tmp/motorvision-manifest-policy.txt
+            /tmp/motorvision-mlkit-manifest-tokens.txt
           if-no-files-found: error
