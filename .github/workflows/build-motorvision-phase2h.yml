@@ -107,6 +107,27 @@ jobs:
               print('COUPLING',a,'res',res,'manifest_tokens',t)
           open('/tmp/mvpayload-coupling.txt','w').write('\n'.join('%s res=%s %s'%(a,res,t) for a,res,t in critical))
           PY
+      - name: Enforce offline manifest policy
+        run: |
+          python3 - <<'PY'
+          import zipfile,glob,os,re
+          offenders=[]
+          runtime=[]
+          for p in sorted(glob.glob('/tmp/mvdeps/deps/*.aar')):
+              with zipfile.ZipFile(p) as z:
+                  man=z.read('AndroidManifest.xml') if 'AndroidManifest.xml' in z.namelist() else b''
+                  low=man.lower()
+                  if b'android.permission.internet' in low or b'android.permission.access_network_state' in low:
+                      offenders.append(os.path.basename(p))
+                  if any(x in low for x in (b'mlkitinitprovider',b'mlkitcomponentdiscoveryservice',b'textregistrar',b'visioncommonregistrar')):
+                      runtime.append(os.path.basename(p))
+          print('NETWORK_MANIFEST_ARTIFACTS',offenders)
+          print('MLKIT_RUNTIME_MANIFEST_ARTIFACTS',runtime)
+          # Network-bearing transport manifests must never be merged into MotorVision.
+          assert 'transport-backend-cct-2.3.3.aar' in offenders
+          open('/tmp/motorvision-manifest-policy.txt','w').write(
+              'DO_NOT_MERGE_NETWORK_MANIFESTS='+','.join(offenders)+'\nREQUIRED_MLKIT_RUNTIME_MANIFESTS='+','.join(runtime)+'\n')
+          PY
       - name: Prepare AAR payload map for AIX integration
         run: |
           rm -rf /tmp/mvpayload
@@ -154,4 +175,5 @@ jobs:
             /tmp/mvdeps/dependency-sha256.txt
             /tmp/mvpayload/**
             /tmp/mvpayload-coupling.txt
+            /tmp/motorvision-manifest-policy.txt
           if-no-files-found: error
