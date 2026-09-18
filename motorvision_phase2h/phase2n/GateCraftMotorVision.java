@@ -13,7 +13,10 @@ import com.google.appinventor.components.annotations.UsesApplicationMetadata;
 import com.google.appinventor.components.annotations.androidmanifest.ServiceElement;
 import com.google.appinventor.components.annotations.androidmanifest.MetaDataElement;
 import com.google.appinventor.components.common.ComponentCategory;
-import java.util.Locale;\nimport java.util.List;\nimport java.util.ArrayList;\nimport com.google.appinventor.components.runtime.util.YailList;
+import java.util.Locale;
+import java.util.List;
+import java.util.ArrayList;
+import com.google.appinventor.components.runtime.util.YailList;
 
 @DesignerComponent(version=5, description="Offline GateCraft MotorDiag controller recognition core with bundled image OCR, TOP3 confirmation lists, and GateCraft MD_INDEX asset loading.", category=ComponentCategory.EXTENSION, nonVisible=true, iconName="")
 @SimpleObject(external=true)
