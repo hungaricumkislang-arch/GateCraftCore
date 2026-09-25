@@ -11,15 +11,24 @@ jobs:
   fetch-r8:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch R8/D8
+      - name: Collect Android D8 tooling
         run: |
-          curl -L --fail --retry 3             https://github.com/Col-E/r8/releases/download/8.3.2-rc1/r8-8.3.2.jar             -o r8.jar
-          sha256sum r8.jar
-          java -cp r8.jar com.android.tools.r8.D8 --help >/dev/null
-      - name: Upload R8
+          set -euxo pipefail
+          D8_BIN="$(find "$ANDROID_HOME" -type f -path '*/build-tools/*/d8' | sort -V | tail -1)"
+          ANDROID_JAR="$(find "$ANDROID_HOME/platforms" -type f -name android.jar | sort -V | tail -1)"
+          test -n "$D8_BIN"
+          test -n "$ANDROID_JAR"
+          BUILD_TOOLS_DIR="$(dirname "$D8_BIN")"
+          cp "$BUILD_TOOLS_DIR/lib/d8.jar" d8.jar
+          cp "$ANDROID_JAR" android.jar
+          "$D8_BIN" --version
+          sha256sum d8.jar android.jar
+      - name: Upload D8 tooling
         uses: actions/upload-artifact@v4
         with:
-          name: sitebuilder-r8-8.3.2
-          path: r8.jar
+          name: sitebuilder-d8-tooling
+          path: |
+            d8.jar
+            android.jar
           retention-days: 1
           if-no-files-found: error
