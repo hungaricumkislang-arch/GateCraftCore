@@ -1,0 +1,25 @@
+name: SiteBuilder Tooling R8
+
+on:
+  push:
+    branches: [ sitebuilder-tooling-r8 ]
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-r8:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch R8/D8
+        run: |
+          curl -L --fail --retry 3             https://github.com/Col-E/r8/releases/download/8.3.2-rc1/r8-8.3.2.jar             -o r8.jar
+          sha256sum r8.jar
+          java -cp r8.jar com.android.tools.r8.D8 --help >/dev/null
+      - name: Upload R8
+        uses: actions/upload-artifact@v4
+        with:
+          name: sitebuilder-r8-8.3.2
+          path: r8.jar
+          retention-days: 1
+          if-no-files-found: error
